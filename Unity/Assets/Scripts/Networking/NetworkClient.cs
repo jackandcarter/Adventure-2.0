@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Adventure.Shared.Network.Messages;
 using UnityEngine;
 
 namespace Adventure.Networking
@@ -18,8 +21,17 @@ namespace Adventure.Networking
 
         private bool connected;
 
+        private readonly JsonSerializerOptions serializerOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true
+        };
+
+        private readonly Queue<string> simulatedIncoming = new();
+
         public event Action Connected;
         public event Action<string> Disconnected;
+        public event Action<string> MessageReceived;
 
         public void Configure(string hostName, int portNumber)
         {
@@ -57,8 +69,46 @@ namespace Adventure.Networking
                 return;
             }
 
-            Debug.Log($"Sending {route} -> {payload}");
+            var envelope = new MessageEnvelope<TPayload>
+            {
+                Type = route,
+                Payload = payload
+            };
+
+            var serialized = JsonSerializer.Serialize(envelope, serializerOptions);
+            Debug.Log($"Sending {route} -> {serialized}");
             // Implementation placeholder for transport-level send.
+        }
+
+        public void SendEnvelope<TPayload>(MessageEnvelope<TPayload> envelope) where TPayload : class
+        {
+            if (!connected)
+            {
+                Debug.LogWarning($"Unable to send envelope {envelope.Type}; not connected.");
+                return;
+            }
+
+            var serialized = JsonSerializer.Serialize(envelope, serializerOptions);
+            Debug.Log($"Sending envelope {envelope.Type}: {serialized}");
+        }
+
+        public bool IsConnected => connected;
+
+        /// <summary>
+        /// Allows tests and offline flows to push incoming messages into the transport.
+        /// </summary>
+        public void SimulateIncoming(string rawJson)
+        {
+            simulatedIncoming.Enqueue(rawJson);
+        }
+
+        private void Update()
+        {
+            while (simulatedIncoming.Count > 0)
+            {
+                var next = simulatedIncoming.Dequeue();
+                MessageReceived?.Invoke(next);
+            }
         }
     }
 }
