@@ -1,0 +1,155 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2865
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 # AdventureBot 2.0 \'96 Project Overview\
+\
+## Vision\
+\
+AdventureBot 2.0 is a **co-op, top-down action RPG** inspired by *The Legend of Zelda: A Link to the Past* (SNES era). It features modern visuals and systems, with:\
+\
+- Up to **6 players** in a dungeon session.\
+- A **main lobby / hub** area where logged-in users can:\
+  - Hang out and chat in real time.\
+  - Form parties.\
+  - Start new **randomly generated dungeon runs**.\
+- Procedural dungeons using reusable **room prefabs** with doors, keys, traps, and bosses.\
+- Deep RPG systems:\
+  - Classes and abilities\
+  - Limit break / trance meter\
+  - Status effects, buffs, debuffs\
+  - DoT, HoT, resurrection, death handling\
+  - Attack speed, cast time, evasion, crit\
+  - Elemental system (elements, weaknesses, resistances, affinities)\
+\
+The original AdventureBot for Discord was turn-based with text output and procedural runs. Here we are **keeping that systemic depth**, but moving to **real-time, top-down action** with shared online play and production-quality architecture.\
+\
+## Tech Stack\
+\
+- **Client:** Unity 6.2, C#, 2D top-down.\
+- **Server:** .NET 8 console app (C#) running on Ubuntu.\
+- **Database:** MariaDB (existing on VPS).\
+- **Networking:** JSON messages over TCP or WebSocket (authoritative server).\
+\
+## Architecture Overview\
+\
+### Unity Client\
+\
+Responsibilities:\
+\
+- Input handling, camera, movement for local player.\
+- Rendering:\
+  - Tiles, sprites, animations.\
+  - UI: health/mana/trance, ability bar, mini-map, chat, etc.\
+- Client-side prediction (if used) and smoothing.\
+- Scene management (Bootstrap \uc0\u8594  MainMenu \u8594  Lobby \u8594  Dungeon).\
+- No authoritative decisions; all final game state comes from server.\
+\
+### Game Server\
+\
+Responsibilities:\
+\
+- Player connections & sessions.\
+- Authentication (login, account association).\
+- Lobby/hub:\
+  - List of online players.\
+  - Party creation/join/leave.\
+  - Chat channels (lobby, party, dungeon).\
+- Dungeon instance management:\
+  - Create instance from seed and theme.\
+  - Maintain room graph and states.\
+  - Track players inside each instance.\
+- Simulation:\
+  - Movement validation.\
+  - Hit detection.\
+  - Combat resolution.\
+  - Status effects, DoTs, HoTs, buffs/debuffs.\
+  - Limit break / trance meter.\
+- Persistence:\
+  - Accounts, characters\
+  - Inventory and equipment\
+  - Ability unlocks\
+  - Dungeon run history and rewards\
+\
+### Database (MariaDB)\
+\
+- Single source of persistent truth for:\
+  - Accounts & characters.\
+  - Items, inventory, equipment.\
+  - Ability unlocks and progression.\
+  - Dungeon runs and outcomes.\
+- Some data may be **static definitions** (items, abilities) stored in JSON/ScriptableObjects client-side and/or mirrored in DB for analytics and future features.\
+\
+## Major Systems\
+\
+1. **Networking & Sessions**\
+   - Low-level network listener, encoding/decoding JSON messages.\
+   - Session tracking, auth, heartbeats/timeouts.\
+\
+2. **Lobby & Matchmaking**\
+   - Players join lobby after login.\
+   - Chat in lobby.\
+   - Create/join parties.\
+   - Start dungeon instance for a party.\
+\
+3. **Dungeon Generation & Instances**\
+   - Seed and theme based.\
+   - Graph of room instances using predefined room templates.\
+   - Doors (open/locked), keys, triggers, boss rooms.\
+   - Instance lifecycle: create \uc0\u8594  active \u8594  clear/wipe/abort \u8594  teardown.\
+\
+4. **Character System & Progression**\
+   - Classes, base stats, growth.\
+   - Leveling, XP, unlocked abilities.\
+   - Equipment and inventory.\
+\
+5. **Combat System (Real-time)**\
+   - Player/enemy movement.\
+   - Abilities (cast time, cooldown, cost).\
+   - Status effects (buffs/debuffs).\
+   - Damage, healing, crits, evasion.\
+   - Trance/limit break.\
+\
+6. **Element System**\
+   - Elements (e.g. Fire, Ice, Lightning, Earth, Light, Dark).\
+   - Elemental affinities, resistances, weaknesses.\
+   - Damage multipliers.\
+\
+7. **Editor Tools**\
+   - ScriptableObjects for:\
+     - Classes\
+     - Abilities\
+     - Status effects\
+     - Elements\
+     - Enemies\
+     - Loot tables\
+     - Room templates\
+     - Dungeon themes\
+   - Custom editor windows:\
+     - Content browser\
+     - Room template editor\
+     - Dungeon theme editor\
+   - Validation tools: e.g. check for broken references, invalid identifiers.\
+\
+8. **UI & UX**\
+   - All main UI built in Unity editor with Canvas system.\
+   - Scripts only drive pre-existing UI:\
+     - Binding, toggling, populating lists using element prefabs.\
+     - No full runtime layout generation.\
+\
+## Implementation Phases\
+\
+See `07_TASKS_FOR_CODEX.md` for explicit tasks.\
+\
+High-level phases:\
+\
+1. Server skeleton + DB.\
+2. Unity client core (Bootstrap, scenes, base networking).\
+3. Lobby + party + chat.\
+4. Dungeon instances + basic combat.\
+5. RPG systems & content tools.\
+6. Polishing, anti-cheat, and performance hardening.\
+}

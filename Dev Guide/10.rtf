@@ -1,0 +1,316 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2865
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 # Tasks for Codex \'96 Implementation Blueprint\
+\
+This file is for Codex (and future contributors) to break the design into concrete tasks and code structures.\
+\
+## Overall Repo Structure (First Pass)\
+\
+- `/docs` \'96 design docs (this folder).\
+- `/server` \'96 .NET 8 server project.\
+- `/unity` \'96 Unity 6.2 project.\
+\
+---\
+\
+## Server Tasks (C#, .NET 8, MariaDB)\
+\
+### 1. Server Project Setup\
+\
+- Create `AdventureBot.Server` .NET 8 console project under `/server`.\
+- Basic structure:\
+  - `Program.cs` with host startup:\
+    - Read config (host, port, DB connection string).\
+    - Initialize logging.\
+    - Start `GameServer` entrypoint.\
+\
+### 2. Config & Logging\
+\
+- Add a configuration file (JSON or similar) for:\
+  - Server host/port.\
+  - MariaDB connection string.\
+- Implement simple logging wrapper using built-in logging.\
+\
+### 3. Networking Layer\
+\
+Create namespace `AdventureBot.Server.Network` with:\
+\
+- `ConnectionListener`\
+  - Constructor: takes `host`, `port`, `ILogger`, `GameServer` reference.\
+  - Method: `StartAsync()` to begin accepting clients.\
+- `ClientSession`\
+  - Holds:\
+    - Socket/connection streams.\
+    - Associated account/character (once authenticated).\
+    - Incoming message queue.\
+  - Methods:\
+    - `SendAsync(GameMessageBase message)`\
+    - Receive loop for JSON messages.\
+- `MessageRouter`\
+  - Accepts: `(ClientSession, GameMessageBase)`.\
+  - Routes by `Type` field to handlers.\
+\
+### 4. Message Definitions\
+\
+Create namespace `AdventureBot.Server.Messages`:\
+\
+- Base `GameMessageBase`\
+  - `string Type \{ get; set; \}`\
+- DTOs for core flows:\
+  - Auth:\
+    - `LoginRequest`\
+    - `LoginResult`\
+    - `AccountState`\
+  - Lobby/Party:\
+    - `JoinLobbyRequest`\
+    - `LobbyStateUpdate`\
+    - `CreatePartyRequest`\
+    - `JoinPartyRequest`\
+    - `PartyStateUpdate`\
+  - Chat:\
+    - `SendChatMessage`\
+    - `ChatMessageBroadcast`\
+  - Dungeon:\
+    - `StartDungeonRequest`\
+    - `DungeonInstanceCreated`\
+    - `DungeonStateSnapshot`\
+    - `DungeonEvent` (door updates, boss spawn, etc.)\
+  - Combat:\
+    - `MoveCommand`\
+    - `AbilityCastRequest`\
+    - `CombatEvent` (damage, heal, death).\
+\
+Ensure serialization to/from JSON using System.Text.Json (or equivalent).\
+\
+### 5. Auth & Accounts\
+\
+- Namespace: `AdventureBot.Server.Auth`\
+- Classes:\
+  - `AuthService`\
+    - Methods:\
+      - `AuthenticateAsync(username, password)`\
+      - `GetCharactersForAccountAsync(accountId)`\
+  - `AuthMessageHandler`\
+    - Handles `LoginRequest`, returns `LoginResult` and `AccountState`.\
+\
+### 6. Persistence Layer\
+\
+- Namespace: `AdventureBot.Server.Persistence`\
+- Implement:\
+  - DB context/connection factory using MariaDB.\
+  - Repository interfaces and implementations:\
+    - `IAccountRepository`\
+    - `ICharacterRepository`\
+    - `IItemRepository`\
+    - `IDungeonRunRepository`\
+  - Methods to match schema in `03_DATABASE_SCHEMA.md`.\
+- Create SQL migrations/init scripts:\
+  - To create `accounts`, `characters`, `classes`, `items`, `dungeon_runs`, etc.\
+\
+### 7. Lobby / Party / Chat Systems\
+\
+- Namespace: `AdventureBot.Server.Lobby`\
+- Classes:\
+  - `LobbyService`\
+    - Tracks online players.\
+    - Maintains parties and membership.\
+  - `Party`\
+    - ID, leader, member list, state.\
+  - `LobbyMessageHandler`\
+    - Handles join lobby, party creation/join/leave.\
+  - `ChatService`\
+    - Handles chat channels (lobby, party, dungeon).\
+    - Broadcasts messages.\
+  - `ChatMessageHandler`\
+    - Handles `SendChatMessage`.\
+\
+### 8. Dungeon Instances & Generator Skeleton\
+\
+- Namespace: `AdventureBot.Server.Dungeon`\
+- Classes:\
+  - `DungeonInstanceManager`\
+    - Maintains collection of `DungeonInstance`.\
+    - Methods:\
+      - `CreateInstanceForParty(party, seed, themeId)`\
+      - `GetInstance(instanceId)`\
+  - `DungeonInstance`\
+    - `InstanceId`, `Seed`, `ThemeId`.\
+    - Collection of `DungeonRoomInstance`.\
+    - Set of participating players.\
+  - `DungeonRoomInstance`\
+    - Room template identifier.\
+    - Door states.\
+    - Enemy spawns.\
+- `DungeonGenerator`\
+  - Input: seed, theme.\
+  - Output: list of `DungeonRoomInstance` with connections.\
+  - Implement simple algorithm first (e.g., linear chain of rooms) and expand later.\
+\
+### 9. Simulation / Combat Engine Skeleton\
+\
+- Namespace: `AdventureBot.Server.Combat`\
+- Classes:\
+  - `GameEntity` base.\
+  - `PlayerEntity`, `EnemyEntity`.\
+  - `CombatSystem`\
+    - Tick method:\
+      - Applies queued movement and ability commands.\
+      - Updates status effects.\
+      - Computes damage/healing.\
+  - `StatusEffectSystem`.\
+- `GameLoop` or `SimulationLoop`:\
+  - Runs at a fixed tick rate.\
+  - Invokes `Update` on all active `DungeonInstance`s.\
+\
+### 10. Basic End-to-End Flow\
+\
+Implement minimal vertical slice:\
+\
+- Client can:\
+  - Connect.\
+  - Login.\
+  - See lobby list with themself.\
+  - Create a party (party of one).\
+  - Start a simple dungeon instance.\
+- Server:\
+  - Creates trivial dungeon (one room).\
+  - Responds with `DungeonInstanceCreated`.\
+  - Sends simple `DungeonStateSnapshot` with room info.\
+\
+---\
+\
+## Unity Client Tasks (Unity 6.2)\
+\
+### 1. Unity Project Setup\
+\
+- Create project under `/unity`.\
+- Setup assembly definitions as per `01_CLIENT_UNITY_ARCHITECTURE.md`.\
+- Create scenes:\
+  - `Bootstrap`\
+  - `MainMenu`\
+  - `Lobby`\
+  - `Dungeon`\
+\
+### 2. Bootstrap Scene & Managers\
+\
+- Add `GameBootstrap` MonoBehaviour:\
+  - Sets up singletons and `DontDestroyOnLoad`.\
+- Add `NetworkClient` MonoBehaviour:\
+  - Connects to server (hardcoded host/port initially).\
+  - Exposes `ConnectAsync`, `SendAsync`, and `OnMessageReceived`.\
+- Add `GameStateClient` manager:\
+  - Can be a pure C# singleton initialized by `GameBootstrap`.\
+- Add `InputManager`:\
+  - Handles movement/attack keybindings.\
+- Add `AudioManager`.\
+\
+### 3. Main Menu UI\
+\
+- Build `Canvas_MainMenu` with:\
+  - Login panel.\
+  - Character select panel.\
+  - Character creation panel.\
+- Add `MainMenuUIController`:\
+  - Serialized references to UI elements.\
+  - Sends `LoginRequest` to server.\
+  - Handles `LoginResult` and `AccountState`.\
+  - Shows character list, sends character selection message.\
+\
+### 4. Lobby UI\
+\
+- Build `Canvas_Lobby` with:\
+  - Player list.\
+  - Party panel.\
+  - Chat panel.\
+  - Start dungeon button.\
+- Add `LobbyUIController`:\
+  - Subscribes to `LobbyStateUpdate`, `PartyStateUpdate`, `ChatMessageBroadcast`.\
+  - Sends party management and chat messages.\
+\
+### 5. Dungeon Scene & Basic Player\
+\
+- Dungeon scene with:\
+  - `DungeonRoot`.\
+  - Camera with follow script.\
+  - `Canvas_InDungeon` HUD placeholder.\
+- Create `PlayerCharacter` prefab:\
+  - Sprite, animator, rigidbody, collider.\
+  - `PlayerView`, `NetworkEntityClient`.\
+- Implement **simple** movement locally first:\
+  - For early testing, without server correction.\
+  - Then integrate server authoritative updates.\
+\
+### 6. Client Message Types & Handlers\
+\
+- Mirror server message DTOs on client where needed.\
+- Implement handlers for:\
+  - `LoginResult`.\
+  - `AccountState`.\
+  - `LobbyStateUpdate`.\
+  - `PartyStateUpdate`.\
+  - `ChatMessageBroadcast`.\
+  - `DungeonInstanceCreated`.\
+  - `DungeonStateSnapshot`.\
+\
+### 7. DungeonView and Room Prefabs\
+\
+- Create minimal `RoomTemplate` ScriptableObject type.\
+- Create a simple test room prefab.\
+- Implement `DungeonView`:\
+  - Receives room layout from `GameStateClient`.\
+  - Instantiates the test room prefab.\
+  - Places player at spawn point.\
+\
+---\
+\
+## Content & Tools Tasks (Unity Editor)\
+\
+### 1. ScriptableObject Definitions\
+\
+Implement in `AdventureBot.Client.Content`:\
+\
+- `ClassDefinition`\
+- `AbilityDefinition`\
+- `StatusEffectDefinition`\
+- `ElementDefinition`\
+- `EnemyArchetype`\
+- `LootTableDefinition`\
+- `RoomTemplate`\
+- `DungeonThemeDefinition`\
+\
+Each with basic fields from docs.\
+\
+### 2. Basic Editor Windows\
+\
+- `ContentBrowserWindow`\
+  - Lists assets by type.\
+- `RoomTemplateEditor`\
+- `DungeonThemeEditor`\
+\
+Start simple: list + some basic validation.\
+\
+---\
+\
+## Iteration Strategy\
+\
+1. **Get server + client to talk**:\
+   - Login, lobby, simple dungeon start.\
+2. **Add minimal movement sync**:\
+   - Local player moves in dungeon; server echoes positions.\
+3. **Add a single enemy and basic combat**:\
+   - Simple ability or attack, health bars.\
+4. **Layer in RPG systems**:\
+   - Stats, more abilities, status effects.\
+5. **Expand dungeon generator**:\
+   - More room templates, keys/doors.\
+\
+Every new feature should:\
+\
+- Follow separation of concerns.\
+- Respect editor-first UI principle.\
+- Avoid runtime UI layout generation.\
+}

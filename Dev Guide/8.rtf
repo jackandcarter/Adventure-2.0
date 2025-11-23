@@ -1,0 +1,218 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2865
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 \
+---\
+\
+### `05_DUNGEON_GENERATION_AND_EDITOR_TOOLS.md`\
+\
+```md\
+# Dungeon Generation & Editor Tools\
+\
+## Dungeon Generator High-Level\
+\
+The dungeon generator should:\
+\
+- Take input:\
+  - `seed` (int/long)\
+  - `theme` (e.g. \'93crypt\'94, \'93forest\'94, \'93lava\'94)\
+  - `difficulty` (optional)\
+- Produce:\
+  - A graph of rooms with:\
+    - Start room\
+    - Paths, loops, dead ends\
+    - Key/lock relationships (keys \uc0\u8594  locked doors/rooms)\
+    - Boss room\
+  - Room data includes:\
+    - Room template identifiers\
+    - Door connectivity\
+    - Enemy spawn groups\
+    - Loot/treasure placements\
+\
+The server runs the generator; the client only receives layout data and room identifiers, then chooses prefabs to render.\
+\
+## Room Templates\
+\
+### Definition (Conceptual)\
+\
+Room templates are static definitions that define:\
+\
+- Layout type (e.g. small, medium, large, corridor, crossroad, boss arena).\
+- Allowed door connections (N/E/S/W).\
+- Tags:\
+  - `start`\
+  - `treasure`\
+  - `elite`\
+  - `boss`\
+  - `connector`\
+- Enemy spawn group IDs and rules.\
+- Special properties:\
+  - `requiresKey` (for connecting doors).\
+  - `containsPuzzle` (future use).\
+  - `trapDensity` (optional).\
+\
+### Unity Representation\
+\
+- **Room Prefab**: a Unity prefab with:\
+  - Tilemap or sprite layout.\
+  - Colliders for walls and environment.\
+  - Door markers:\
+    - Empty GameObjects with `DoorMarker` component.\
+    - Each has a direction enum (North, East, South, West).\
+  - Spawn points for:\
+    - Player spawn.\
+    - Enemy spawn groups.\
+    - Loot chests.\
+\
+- **RoomTemplate ScriptableObject**:\
+  - Fields:\
+    - `string identifier`\
+    - `GameObject roomPrefab` (reference)\
+    - `List<DoorDirection> allowedDoorDirections`\
+    - `List<string> tags`\
+    - Enemy group IDs or references.\
+    - Additional metadata as needed.\
+\
+Server representation:\
+\
+- A simplified DTO that includes only:\
+  - `identifier`\
+  - Allowed doors\
+  - Tags\
+  - Enemy group identifiers\
+\
+## Dungeon Themes\
+\
+Each theme:\
+\
+- Defines a pool of room templates with weights.\
+- Specifies:\
+  - Start room templates.\
+  - Boss room templates.\
+  - Typical enemy tiers.\
+  - Environmental hazards.\
+\
+Unity representation:\
+\
+- **DungeonThemeDefinition ScriptableObject**:\
+  - `identifier`\
+  - `displayName`\
+  - `List<RoomTemplateEntry>` where each has:\
+    - `RoomTemplate template`\
+    - `int weight`\
+  - Settings for:\
+    - Enemy list/tiers/IDs.\
+    - Boss template IDs.\
+\
+Server representation:\
+\
+- Data loaded from config (JSON/DB) referencing room template identifiers and weights.\
+\
+## Doors & Locks\
+\
+### Mechanics\
+\
+- Doors connect room exits.\
+- Door states:\
+  - Open\
+  - Closed\
+  - Locked\
+- Lock conditions:\
+  - Key items.\
+  - Kill all enemies.\
+  - Trigger/puzzle solved.\
+\
+### Unity\
+\
+- **DoorView** component:\
+  - Handles open/close/lock/unlock animations.\
+  - Collider state (blocking vs non-blocking).\
+- `DoorMarker` component:\
+  - Contains data used by `DungeonView` to place door instances.\
+\
+### Server\
+\
+- For each `DungeonRoomInstance`, store door states:\
+  - `DoorState` with:\
+    - Connected room IDs.\
+    - Locked/unlocked.\
+    - Condition (key ID, kill count, etc.).\
+\
+- Server:\
+  - Validates when players interact to open doors.\
+  - Updates door state and broadcasts to clients.\
+\
+## Editor Tools in Unity\
+\
+### 1. Content Browser Window\
+\
+- A custom editor window listing ScriptableObjects:\
+  - Classes, Abilities, StatusEffects, Elements, Enemies, RoomTemplates, DungeonThemes, LootTables.\
+- Features:\
+  - Search by identifier/name.\
+  - Filter by type.\
+  - Double-click to open asset.\
+\
+### 2. Room Template Editor\
+\
+- Custom editor or window for `RoomTemplate` ScriptableObjects:\
+  - Fields for identifier, prefab reference, tags.\
+  - UI to define allowed door directions.\
+  - Reference enemy spawn presets.\
+  - Validation:\
+    - Missing prefab.\
+    - Duplicate identifiers.\
+    - Invalid tags.\
+\
+### 3. Dungeon Theme Editor\
+\
+- Editor window for `DungeonThemeDefinition`:\
+  - List available room templates.\
+  - UI to assign weights.\
+  - Validation:\
+    - No start room defined.\
+    - No boss room defined.\
+    - Empty room pool.\
+\
+### 4. Validation Tools\
+\
+- A menu item (e.g. `AdventureBot/Validate Content`) that:\
+  - Scans all ScriptableObjects.\
+  - Checks:\
+    - Unique identifiers.\
+    - No missing references.\
+    - Consistency between theme room pools and actual room templates.\
+  - Logs issues to Console and maybe in a report window.\
+\
+## Server/Client Coordination\
+\
+- Shared identifiers (strings) serve as the link between server and client content:\
+  - RoomTemplate IDs\
+  - Enemy IDs\
+  - Ability IDs\
+  - Element IDs\
+- Server sends:\
+  - The graph of room identifiers with connections and states.\
+  - Enemy spawn info with enemy identifiers and positions (relative).\
+- Client:\
+  - Looks up `RoomTemplate` by identifier.\
+  - Instantiates appropriate prefab.\
+  - Spawns enemies using `EnemyArchetype` definitions and prefabs.\
+\
+## From Original AdventureBot\
+\
+We are preserving the spirit of:\
+\
+- Procedurally generated dungeons with themed rooms.\
+- Randomized paths, optional side rooms, and boss rooms.\
+- Encounters that can include:\
+  - Packs of enemies.\
+  - Elites.\
+  - Boss fights.\
+\
+This system translates the Discord text dungeon generator into a **visual room-graph generator** that uses ScriptableObject definitions and room prefabs.\
+}

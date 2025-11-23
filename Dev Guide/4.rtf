@@ -1,0 +1,74 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2865
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 # Server Architecture & Networking\
+\
+## Goals\
+\
+- Authoritative dedicated server, written in **C# (.NET 8)**, running on Ubuntu.\
+- Manages all game simulation, persistent data, and external connections.\
+- Uses **MariaDB** for persistence via a clean persistence layer.\
+- Uses a **JSON message protocol** over TCP or WebSocket.\
+\
+## High-Level Architecture\
+\
+### Projects / Namespaces\
+\
+- `AdventureBot.Server`\
+  - Entry point (Program.cs).\
+  - Configuration, DI (if used), and startup.\
+- `AdventureBot.Server.Network`\
+  - Network listener (TCP/WebSocket).\
+  - Client session management.\
+  - Message serialization/deserialization.\
+- `AdventureBot.Server.Messages`\
+  - Shared DTOs for JSON-encoded messages.\
+- `AdventureBot.Server.Domain`\
+  - Core game logic:\
+    - Entities, stats, combat, status effects, elements, abilities.\
+    - Dungeon generation and instance management.\
+    - Lobby and party state.\
+- `AdventureBot.Server.Persistence`\
+  - MariaDB context, repositories.\
+  - SQL migrations/scripts.\
+- `AdventureBot.Server.Logging`\
+  - Logging helpers and utilities.\
+\
+## Network Layer\
+\
+### ConnectionListener\
+\
+Responsibilities:\
+\
+- Listen on a configured port for incoming client connections.\
+- Accept new connections and create `ClientSession` objects.\
+- Managing connection lifetime and heartbeats.\
+\
+### ClientSession\
+\
+Responsibilities:\
+\
+- Represent one connected client.\
+- Maintain:\
+  - Connection stream/socket.\
+  - Authenticated account and character (if logged in).\
+- Handle:\
+  - Receiving raw data.\
+  - Decoding to JSON messages.\
+  - Enqueueing messages for processing.\
+  - Sending outbound messages.\
+\
+### Message Format\
+\
+All messages are JSON with at least:\
+\
+```json\
+\{\
+  "type": "MessageTypeString",\
+  "payload": \{ /* message-specific data */ \}\
+\}\
+}
