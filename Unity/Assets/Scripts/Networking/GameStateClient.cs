@@ -1,4 +1,5 @@
 using System;
+using Adventure.Shared.Network.Messages;
 using UnityEngine;
 
 namespace Adventure.Networking
@@ -13,6 +14,9 @@ namespace Adventure.Networking
         public event Action<PlayerVitals> PlayerVitalsUpdated;
         public event Action<AbilityBarState> AbilityBarUpdated;
         public event Action<InteractionPrompt> InteractionPromptUpdated;
+        public event Action<CombatEvent> CombatEventReceived;
+        public event Action<DungeonState> DungeonStateUpdated;
+        public event Action<ErrorResponse> ErrorReceived;
 
         public void PushChatMessage(string sender, string message)
         {
@@ -37,6 +41,21 @@ namespace Adventure.Networking
         public void PushInteractionPrompt(InteractionPrompt prompt)
         {
             InteractionPromptUpdated?.Invoke(prompt);
+        }
+
+        public void PushCombatEvent(CombatEvent combatEvent)
+        {
+            CombatEventReceived?.Invoke(combatEvent);
+        }
+
+        public void PushDungeonState(DungeonState dungeonState)
+        {
+            DungeonStateUpdated?.Invoke(dungeonState);
+        }
+
+        public void PushError(ErrorResponse error)
+        {
+            ErrorReceived?.Invoke(error);
         }
     }
 
