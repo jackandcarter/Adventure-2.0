@@ -21,17 +21,20 @@ namespace Adventure.Server.Generation
                 throw new InvalidOperationException("Dungeon template contains no rooms.");
             }
 
-            var startRoomTemplate = ChooseRoom(template.Rooms, RoomTemplateType.Start)
-                ?? throw new InvalidOperationException("Dungeon template requires at least one start room.");
+            var startRoomTemplate = ChooseRoom(template.Rooms, RoomTemplateType.Safe)
+                ?? ChooseRoom(template.Rooms, RoomTemplateType.Start)
+                ?? throw new InvalidOperationException("Dungeon template requires at least one safe/start room.");
             var bossRoomTemplate = ChooseRoom(template.Rooms, RoomTemplateType.Boss)
                 ?? throw new InvalidOperationException("Dungeon template requires at least one boss room.");
 
-            var combatRooms = ChooseRooms(template.Rooms, RoomTemplateType.Combat, settings.CombatRooms);
-            var puzzleRooms = ChooseRooms(template.Rooms, RoomTemplateType.Puzzle, settings.PuzzleRooms);
+            var enemyRooms = ChooseRooms(template.Rooms, RoomTemplateType.Enemy, settings.EnemyRooms);
+            var treasureRooms = ChooseRooms(template.Rooms, RoomTemplateType.Treasure, settings.TreasureRooms);
+            var minibossRooms = settings.IncludeMiniboss ? ChooseRooms(template.Rooms, RoomTemplateType.Miniboss, 1) : Array.Empty<RoomTemplate>();
 
             var orderedTemplates = new List<RoomTemplate> { startRoomTemplate };
-            orderedTemplates.AddRange(combatRooms);
-            orderedTemplates.AddRange(puzzleRooms);
+            orderedTemplates.AddRange(enemyRooms);
+            orderedTemplates.AddRange(treasureRooms);
+            orderedTemplates.AddRange(minibossRooms);
             orderedTemplates.Add(bossRoomTemplate);
 
             var generatedRooms = new List<GeneratedRoom>();

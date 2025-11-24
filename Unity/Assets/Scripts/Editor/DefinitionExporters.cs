@@ -74,6 +74,7 @@ namespace Adventure.EditorTools
             {
                 DefinitionExportUtility.ExportAll<AbilityDefinitionAsset>();
                 DefinitionExportUtility.ExportAll<StatusEffectDefinitionAsset>();
+                DefinitionExportUtility.ExportAll<ItemDefinition>();
                 DefinitionExportUtility.ExportAll<PlayerClassDefinition>();
                 DefinitionExportUtility.ExportAll<LootTableDefinition>();
                 DefinitionExportUtility.ExportAll<EnemyArchetypeDefinition>();
