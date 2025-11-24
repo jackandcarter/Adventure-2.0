@@ -122,7 +122,7 @@ namespace Adventure.GameData.Registry
         }
 
 #if UNITY_EDITOR
-        internal void SetEntries(List<ClassEntry> newClasses, List<AbilityEntry> newAbilities)
+        public void SetEntries(List<ClassEntry> newClasses, List<AbilityEntry> newAbilities)
         {
             classes = newClasses ?? new List<ClassEntry>();
             abilities = newAbilities ?? new List<AbilityEntry>();
