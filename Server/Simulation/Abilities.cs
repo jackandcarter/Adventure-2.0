@@ -11,6 +11,12 @@ namespace Adventure.Server.Simulation
         Channel
     }
 
+    public enum AbilityCategory
+    {
+        Standard,
+        Trance
+    }
+
     public enum AbilityResourceType
     {
         Mana,
@@ -38,6 +44,8 @@ namespace Adventure.Server.Simulation
 
         public AbilityTiming Timing { get; init; } = AbilityTiming.Instant;
 
+        public AbilityCategory Category { get; init; } = AbilityCategory.Standard;
+
         public bool RequiresLineOfSight { get; init; } = true;
 
         public AbilityCost Cost { get; init; } = new AbilityCost { ResourceType = AbilityResourceType.Mana, Amount = 10 };
@@ -47,6 +55,16 @@ namespace Adventure.Server.Simulation
         public float Power { get; init; } = 1f;
 
         public bool IsHealing { get; init; }
+
+        public float MinimumTrance { get; init; }
+
+        public TranceBehavior TranceBehavior { get; init; } = TranceBehavior.None;
+    }
+
+    public enum TranceBehavior
+    {
+        None,
+        DoubleCast
     }
 
     public record AbilityCastCommand(string AbilityId, string TargetId, Vector3 TargetPosition, DateTime Timestamp);
@@ -131,6 +149,12 @@ namespace Adventure.Server.Simulation
                 return false;
             }
 
+            if (definition.Category == AbilityCategory.Trance && !HasRequiredTrance(caster, definition))
+            {
+                denial = "trance_locked";
+                return false;
+            }
+
             if (!HasResources(caster, definition))
             {
                 denial = "resources";
@@ -185,18 +209,32 @@ namespace Adventure.Server.Simulation
                 return;
             }
 
-            Execute(definition, caster, target, targetPosition);
+            ExecuteWithBehavior(definition, caster, target, targetPosition);
         }
 
         public void UpdateChannels(TimeSpan delta, DateTime now, IEnumerable<SimulatedActor> actors)
         {
             foreach (var actor in actors)
             {
-                actor.TickChannel(delta, now, definition => Execute(definition, actor, actor.Room?.FindActor(actor.ChannelTargetId), actor.ChannelTargetPosition));
+                actor.TickChannel(delta, now, definition => ExecuteWithBehavior(definition, actor, actor.Room?.FindActor(actor.ChannelTargetId), actor.ChannelTargetPosition));
             }
         }
 
-        private void Execute(AbilityDefinition definition, SimulatedActor caster, SimulatedActor? target, Vector3 targetPosition)
+        private void ExecuteWithBehavior(AbilityDefinition definition, SimulatedActor caster, SimulatedActor? target, Vector3 targetPosition)
+        {
+            switch (definition.TranceBehavior)
+            {
+                case TranceBehavior.DoubleCast:
+                    ExecuteSingle(definition, caster, target, targetPosition);
+                    ExecuteSingle(definition, caster, target, targetPosition);
+                    break;
+                default:
+                    ExecuteSingle(definition, caster, target, targetPosition);
+                    break;
+            }
+        }
+
+        private void ExecuteSingle(AbilityDefinition definition, SimulatedActor caster, SimulatedActor? target, Vector3 targetPosition)
         {
             if (target == null)
             {
@@ -236,6 +274,16 @@ namespace Adventure.Server.Simulation
                 AbilityResourceType.Trance => caster.Resources.Trance.CanSpend(definition.Cost.Amount * caster.StatsSnapshot.TranceSpendEfficiency),
                 _ => true
             };
+        }
+
+        private static bool HasRequiredTrance(SimulatedActor caster, AbilityDefinition definition)
+        {
+            var tranceAvailable = caster.Resources.Trance.Current;
+            var tranceCost = definition.Cost.ResourceType == AbilityResourceType.Trance
+                ? definition.Cost.Amount * caster.StatsSnapshot.TranceSpendEfficiency
+                : 0f;
+
+            return tranceAvailable >= Math.Max(definition.MinimumTrance, tranceCost);
         }
 
         private static bool IsInRange(float range, Vector3 origin, Vector3 target)

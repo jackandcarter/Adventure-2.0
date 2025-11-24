@@ -65,6 +65,54 @@ namespace Adventure.Server.Simulation.Tests
         }
 
         [Fact]
+        public void Validate_TranceAbility_Fails_WhenGaugeTooLow()
+        {
+            var ability = new AbilityDefinition
+            {
+                Id = "limit_break",
+                Category = AbilityCategory.Trance,
+                MinimumTrance = 50,
+                Cost = new AbilityCost { Amount = 20, ResourceType = AbilityResourceType.Trance },
+                Timing = AbilityTiming.Instant
+            };
+
+            catalog.Register(ability);
+            var executor = new AbilityExecutor(catalog, layout);
+            var caster = new SimulatedActor("caster", Vector3.Zero, new StatSnapshot());
+
+            var isValid = executor.Validate(new AbilityCastCommand(ability.Id, string.Empty, Vector3.Zero, DateTime.UtcNow), caster, null, DateTime.UtcNow, out var denial);
+
+            isValid.Should().BeFalse();
+            denial.Should().Be("trance_locked");
+        }
+
+        [Fact]
+        public void Resolve_Triggers_TranceDoubleCast_Without_DoubleCost()
+        {
+            var ability = new AbilityDefinition
+            {
+                Id = "double_black",
+                Category = AbilityCategory.Trance,
+                TranceBehavior = TranceBehavior.DoubleCast,
+                Cost = new AbilityCost { Amount = 20, ResourceType = AbilityResourceType.Trance },
+                Timing = AbilityTiming.Instant,
+                Power = 1f
+            };
+
+            catalog.Register(ability);
+            var executor = new AbilityExecutor(catalog, layout);
+            var caster = new SimulatedActor("caster", Vector3.Zero, new StatSnapshot { AttackPower = 10f });
+            var target = new SimulatedActor("target", Vector3.UnitZ, new StatSnapshot { MaxHealth = 100f, Defense = 0f });
+
+            caster.Resources.Trance.Accrue(100f);
+
+            executor.Resolve(ability, caster, target, Vector3.UnitZ, DateTime.UtcNow);
+
+            executor.Results.Should().HaveCount(2);
+            caster.Resources.Trance.Current.Should().BeGreaterThan(80f);
+        }
+
+        [Fact]
         public void StatResolver_Computes_Scaled_Values()
         {
             var resolver = new StatResolver();

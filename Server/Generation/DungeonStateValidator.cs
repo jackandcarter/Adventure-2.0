@@ -13,6 +13,8 @@ namespace Adventure.Server.Generation
         private readonly Dictionary<string, GeneratedInteractive> interactivesById;
         private readonly Dictionary<string, TriggerTemplate> triggersById;
         private readonly Dictionary<string, GeneratedEnvironmentState> environmentStates;
+        private readonly Dictionary<string, RoomTemplateType> roomTypes;
+        private readonly Dictionary<string, bool> roomClearState;
         private readonly Dictionary<string, HashSet<string>> playerKeyring = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> activatedTriggers = new(StringComparer.OrdinalIgnoreCase);
 
@@ -26,6 +28,11 @@ namespace Adventure.Server.Generation
                 .ToDictionary(t => t.TriggerId, StringComparer.OrdinalIgnoreCase);
             environmentStates = dungeon.EnvironmentStates
                 .ToDictionary(e => $"{e.RoomId}:{e.StateId}", StringComparer.OrdinalIgnoreCase);
+            roomTypes = dungeon.Rooms.ToDictionary(r => r.RoomId, r => r.Template.RoomType, StringComparer.OrdinalIgnoreCase);
+            roomClearState = dungeon.Rooms.ToDictionary(
+                r => r.RoomId,
+                r => !RequiresEnemyClear(r.Template.RoomType),
+                StringComparer.OrdinalIgnoreCase);
         }
 
         public DungeonLayoutSummary CreateLayoutSummary()
@@ -77,6 +84,11 @@ namespace Adventure.Server.Generation
             if (!doorsById.TryGetValue(doorId, out var door))
             {
                 return DungeonActionResult.Denied("unknown_door");
+            }
+
+            if (roomClearState.TryGetValue(door.FromRoomId, out var cleared) && !cleared && RequiresEnemyClear(roomTypes[door.FromRoomId]))
+            {
+                return DungeonActionResult.Denied("room_uncleared");
             }
 
             if (door.State == DoorState.Open)
@@ -196,6 +208,22 @@ namespace Adventure.Server.Generation
             return DungeonActionResult.Accepted(delta);
         }
 
+        public DungeonActionResult MarkRoomCleared(string roomId)
+        {
+            if (!roomTypes.TryGetValue(roomId, out var roomType))
+            {
+                return DungeonActionResult.Denied("unknown_room");
+            }
+
+            if (!RequiresEnemyClear(roomType))
+            {
+                return DungeonActionResult.Accepted(null);
+            }
+
+            roomClearState[roomId] = true;
+            return DungeonActionResult.Accepted(null);
+        }
+
         private bool PlayerHasKey(string playerId, string keyId)
         {
             return playerKeyring.TryGetValue(playerId, out var keys) && keys.Contains(keyId);
@@ -252,6 +280,13 @@ namespace Adventure.Server.Generation
                 StateId = state.StateId,
                 Value = state.Value
             };
+        }
+
+        private static bool RequiresEnemyClear(RoomTemplateType roomType)
+        {
+            return roomType == RoomTemplateType.Enemy
+                || roomType == RoomTemplateType.Miniboss
+                || roomType == RoomTemplateType.Boss;
         }
     }
 

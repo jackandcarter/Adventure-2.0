@@ -4,13 +4,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="../Core/**/*.cs" />
-    <Compile Include="../Persistence/**/*.cs" />
-    <Compile Include="../Network/**/*.cs" />
-    <Compile Include="../Simulation/**/*.cs" />
-    <Compile Include="../../Shared/**/*.cs" />
-  </ItemGroup>
+    <ItemGroup>
+      <Compile Include="../Core/**/*.cs" />
+      <Compile Include="../Generation/**/*.cs" />
+      <Compile Include="../Persistence/**/*.cs" />
+      <Compile Include="../Network/**/*.cs" />
+      <Compile Include="../Simulation/**/*.cs" />
+      <Compile Include="../../Shared/**/*.cs" />
+    </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MySql.Data" Version="8.3.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
