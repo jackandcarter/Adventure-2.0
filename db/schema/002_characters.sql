@@ -1,0 +1,28 @@
+CREATE TABLE IF NOT EXISTS characters (
+    character_id VARCHAR(64) PRIMARY KEY,
+    account_id VARCHAR(64) NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    class VARCHAR(64) NOT NULL,
+    level INT NOT NULL,
+    max_health FLOAT NOT NULL,
+    max_mana FLOAT NOT NULL,
+    attack_power FLOAT NOT NULL,
+    magic_power FLOAT NOT NULL,
+    speed FLOAT NOT NULL,
+    defense FLOAT NOT NULL,
+    magic_resist FLOAT NOT NULL,
+    tenacity FLOAT NOT NULL,
+    precision FLOAT NOT NULL,
+    awareness FLOAT NOT NULL,
+    crit_rating FLOAT NOT NULL,
+    evade_rating FLOAT NOT NULL,
+    trance_generation_bonus FLOAT NOT NULL,
+    trance_spend_efficiency FLOAT NOT NULL,
+    cosmetic_primary_color VARCHAR(16) NOT NULL,
+    cosmetic_secondary_color VARCHAR(16) NOT NULL,
+    cosmetic_outfit_id VARCHAR(64) NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_characters_account FOREIGN KEY (account_id) REFERENCES accounts(account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE INDEX IF NOT EXISTS idx_characters_account ON characters(account_id);
