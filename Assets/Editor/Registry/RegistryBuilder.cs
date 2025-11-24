@@ -13,7 +13,10 @@ namespace Adventure.Editor.Registry
     {
         private const string RegistryDirectory = "Assets/Resources/Registry";
         private const string RegistryAssetPath = RegistryDirectory + "/IDRegistry.asset";
+        private const string FrozenRegistryAssetPath = RegistryDirectory + "/FrozenIDRegistry.asset";
         internal const string RegistryResourcePath = "Registry/IDRegistry";
+
+        private static bool isBuilding;
 
         [InitializeOnLoadMethod]
         private static void Initialize()
@@ -23,6 +26,11 @@ namespace Adventure.Editor.Registry
 
         private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
         {
+            if (isBuilding)
+            {
+                return;
+            }
+
             if (ContainsRelevantChange(importedAssets) || ContainsRelevantChange(deletedAssets) || ContainsRelevantChange(movedAssets) || ContainsRelevantChange(movedFromAssetPaths))
             {
                 BuildRegistry();
@@ -33,7 +41,7 @@ namespace Adventure.Editor.Registry
         {
             foreach (string path in paths)
             {
-                if (path.EndsWith(".asset", StringComparison.OrdinalIgnoreCase))
+                if (path.EndsWith(".asset", StringComparison.OrdinalIgnoreCase) && !IsRegistryAsset(path))
                 {
                     return true;
                 }
@@ -80,15 +88,35 @@ namespace Adventure.Editor.Registry
 
         internal static void BuildRegistry()
         {
-            IDRegistry registry = GetOrCreateRegistry();
-            List<IDRegistry.ClassEntry> classEntries = CollectEntries<ClassDefinition, IDRegistry.ClassEntry>((guid, asset) => new IDRegistry.ClassEntry(guid, asset));
-            List<IDRegistry.AbilityEntry> abilityEntries = CollectEntries<AbilityDefinition, IDRegistry.AbilityEntry>((guid, asset) => new IDRegistry.AbilityEntry(guid, asset));
+            if (isBuilding)
+            {
+                return;
+            }
 
-            ValidateEntries(classEntries, abilityEntries);
+            isBuilding = true;
+            try
+            {
+                IDRegistry registry = GetOrCreateRegistry();
+                List<IDRegistry.ClassEntry> classEntries = CollectEntries<ClassDefinition, IDRegistry.ClassEntry>((guid, asset) => new IDRegistry.ClassEntry(guid, asset));
+                List<IDRegistry.AbilityEntry> abilityEntries = CollectEntries<AbilityDefinition, IDRegistry.AbilityEntry>((guid, asset) => new IDRegistry.AbilityEntry(guid, asset));
+                List<IDRegistry.StatEntry> statEntries = CollectEntries<StatDefinition, IDRegistry.StatEntry>((guid, asset) => new IDRegistry.StatEntry(guid, asset));
 
-            registry.SetEntries(classEntries, abilityEntries);
-            EditorUtility.SetDirty(registry);
-            AssetDatabase.SaveAssets();
+                ValidateEntries(classEntries, abilityEntries, statEntries);
+
+                registry.SetEntries(classEntries, abilityEntries, statEntries);
+                EditorUtility.SetDirty(registry);
+                AssetDatabase.SaveAssets();
+            }
+            finally
+            {
+                isBuilding = false;
+            }
+        }
+
+        private static bool IsRegistryAsset(string path)
+        {
+            return path.Equals(RegistryAssetPath, StringComparison.OrdinalIgnoreCase)
+                   || path.Equals(FrozenRegistryAssetPath, StringComparison.OrdinalIgnoreCase);
         }
 
         private static List<TEntry> CollectEntries<TDefinition, TEntry>(Func<string, TDefinition, TEntry> factory)
@@ -117,11 +145,12 @@ namespace Adventure.Editor.Registry
             return entries;
         }
 
-        private static void ValidateEntries(IReadOnlyList<IDRegistry.ClassEntry> classEntries, IReadOnlyList<IDRegistry.AbilityEntry> abilityEntries)
+        private static void ValidateEntries(IReadOnlyList<IDRegistry.ClassEntry> classEntries, IReadOnlyList<IDRegistry.AbilityEntry> abilityEntries, IReadOnlyList<IDRegistry.StatEntry> statEntries)
         {
             var idUsage = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             ValidateGroup(classEntries, "Class", idUsage, entry => entry.Id, entry => entry.Guid);
             ValidateGroup(abilityEntries, "Ability", idUsage, entry => entry.Id, entry => entry.Guid);
+            ValidateGroup(statEntries, "Stat", idUsage, entry => entry.Id, entry => entry.Guid);
         }
 
         private static void ValidateGroup<TEntry>(IEnumerable<TEntry> entries, string label, Dictionary<string, string> idUsage, Func<TEntry, string> idSelector, Func<TEntry, string> guidSelector)

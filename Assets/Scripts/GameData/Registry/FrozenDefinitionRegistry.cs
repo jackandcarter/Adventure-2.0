@@ -52,14 +52,40 @@ namespace Adventure.GameData.Registry
 #endif
         }
 
+        [Serializable]
+        public struct StatRecord
+        {
+            [SerializeField]
+            private string id;
+
+            [SerializeField]
+            private StatDefinition definition;
+
+            public string Id => id;
+
+            public StatDefinition Definition => definition;
+
+#if UNITY_EDITOR
+            public StatRecord(string id, StatDefinition definition)
+            {
+                this.id = id;
+                this.definition = definition;
+            }
+#endif
+        }
+
         [SerializeField]
         private List<ClassRecord> classes = new List<ClassRecord>();
 
         [SerializeField]
         private List<AbilityRecord> abilities = new List<AbilityRecord>();
 
+        [SerializeField]
+        private List<StatRecord> stats = new List<StatRecord>();
+
         private Dictionary<string, ClassDefinition> classLookup;
         private Dictionary<string, AbilityDefinition> abilityLookup;
+        private Dictionary<string, StatDefinition> statLookup;
 
         public bool TryGetClass(string id, out ClassDefinition definition)
         {
@@ -73,21 +99,34 @@ namespace Adventure.GameData.Registry
             return abilityLookup.TryGetValue(id, out definition);
         }
 
+        public bool TryGetStat(string id, out StatDefinition definition)
+        {
+            EnsureLookups();
+            return statLookup.TryGetValue(id, out definition);
+        }
+
         public IReadOnlyList<ClassDefinition> GetAllClasses()
         {
             EnsureLookups();
             return new List<ClassDefinition>(classLookup.Values);
         }
 
+        public IReadOnlyList<StatDefinition> GetAllStats()
+        {
+            EnsureLookups();
+            return new List<StatDefinition>(statLookup.Values);
+        }
+
         private void OnEnable()
         {
             classLookup = null;
             abilityLookup = null;
+            statLookup = null;
         }
 
         private void EnsureLookups()
         {
-            if (classLookup != null && abilityLookup != null)
+            if (classLookup != null && abilityLookup != null && statLookup != null)
             {
                 return;
             }
@@ -119,13 +158,28 @@ namespace Adventure.GameData.Registry
                     abilityLookup.Add(record.Id, record.Definition);
                 }
             }
+
+            statLookup = new Dictionary<string, StatDefinition>(StringComparer.OrdinalIgnoreCase);
+            foreach (StatRecord record in stats)
+            {
+                if (string.IsNullOrWhiteSpace(record.Id) || record.Definition == null)
+                {
+                    continue;
+                }
+
+                if (!statLookup.ContainsKey(record.Id))
+                {
+                    statLookup.Add(record.Id, record.Definition);
+                }
+            }
         }
 
 #if UNITY_EDITOR
-        public void SetEntries(IEnumerable<IDRegistry.ClassEntry> classEntries, IEnumerable<IDRegistry.AbilityEntry> abilityEntries)
+        public void SetEntries(IEnumerable<IDRegistry.ClassEntry> classEntries, IEnumerable<IDRegistry.AbilityEntry> abilityEntries, IEnumerable<IDRegistry.StatEntry> statEntries)
         {
             classes.Clear();
             abilities.Clear();
+            stats.Clear();
 
             if (classEntries != null)
             {
@@ -149,8 +203,20 @@ namespace Adventure.GameData.Registry
                 }
             }
 
+            if (statEntries != null)
+            {
+                foreach (IDRegistry.StatEntry entry in statEntries)
+                {
+                    if (!string.IsNullOrWhiteSpace(entry.Id) && entry.Asset != null)
+                    {
+                        stats.Add(new StatRecord(entry.Id, entry.Asset));
+                    }
+                }
+            }
+
             classLookup = null;
             abilityLookup = null;
+            statLookup = null;
         }
 #endif
     }
