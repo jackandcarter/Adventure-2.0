@@ -41,6 +41,8 @@ namespace Adventure.Shared.Network.Messages
         public const string AbilityCast = "ability/cast";
         public const string CombatEvent = "combat/event";
         public const string DungeonState = "dungeon/state";
+        public const string DungeonLayout = "dungeon/layout";
+        public const string DungeonStateDelta = "dungeon/update";
         public const string Heartbeat = "system/heartbeat";
         public const string Error = "system/error";
     }
@@ -180,6 +182,27 @@ namespace Adventure.Shared.Network.Messages
         Heal
     }
 
+    public enum RoomTemplateType
+    {
+        Start,
+        Combat,
+        Puzzle,
+        Boss
+    }
+
+    public enum DoorState
+    {
+        Closed,
+        Locked,
+        Open
+    }
+
+    public enum InteractiveStatus
+    {
+        Available,
+        Consumed
+    }
+
     // Dungeon state
     public class DungeonState
     {
@@ -190,6 +213,77 @@ namespace Adventure.Shared.Network.Messages
         public List<string> CompletedObjectives { get; set; } = new();
 
         public List<string> ActiveObjectives { get; set; } = new();
+    }
+
+    public class DungeonLayoutSummary
+    {
+        public string DungeonId { get; set; } = string.Empty;
+
+        public List<DungeonRoomSummary> Rooms { get; set; } = new();
+
+        public List<DungeonDoorState> Doors { get; set; } = new();
+
+        public List<InteractiveObjectState> Interactives { get; set; } = new();
+
+        public List<EnvironmentStateSnapshot> EnvironmentStates { get; set; } = new();
+    }
+
+    public class DungeonRoomSummary
+    {
+        public string RoomId { get; set; } = string.Empty;
+
+        public string TemplateId { get; set; } = string.Empty;
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public RoomTemplateType RoomType { get; set; }
+
+        public int SequenceIndex { get; set; }
+    }
+
+    public class DungeonDoorState
+    {
+        public string DoorId { get; set; } = string.Empty;
+
+        public string FromRoomId { get; set; } = string.Empty;
+
+        public string ToRoomId { get; set; } = string.Empty;
+
+        public string? RequiredKeyId { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public DoorState State { get; set; }
+    }
+
+    public class InteractiveObjectState
+    {
+        public string ObjectId { get; set; } = string.Empty;
+
+        public string RoomId { get; set; } = string.Empty;
+
+        public string Kind { get; set; } = string.Empty;
+
+        public string? GrantedKeyId { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public InteractiveStatus Status { get; set; }
+    }
+
+    public class EnvironmentStateSnapshot
+    {
+        public string RoomId { get; set; } = string.Empty;
+
+        public string StateId { get; set; } = string.Empty;
+
+        public string Value { get; set; } = string.Empty;
+    }
+
+    public class DungeonStateDelta
+    {
+        public List<DungeonDoorState> Doors { get; set; } = new();
+
+        public List<InteractiveObjectState> Interactives { get; set; } = new();
+
+        public List<EnvironmentStateSnapshot> EnvironmentStates { get; set; } = new();
     }
 
     // System / errors
