@@ -151,7 +151,7 @@ namespace Adventure.Editor.UI
             TMP_Text summaryLabel = CreateTMPText("AbilitySummary", entry.transform);
             summaryLabel.text = "Summary";
             summaryLabel.fontSize = 18f;
-            summaryLabel.enableWordWrapping = true;
+            summaryLabel.textWrappingMode = TextWrappingModes.Normal;
 
             LayoutElement element = entry.AddComponent<LayoutElement>();
             element.minHeight = 40f;
@@ -273,7 +273,7 @@ namespace Adventure.Editor.UI
             nameLabel.fontStyle = FontStyles.Bold;
 
             TMP_Text description = CreateTMPText("Description", details.transform);
-            description.enableWordWrapping = true;
+            description.textWrappingMode = TextWrappingModes.Normal;
             description.fontSize = 18f;
 
             TMP_Text statHeader = CreateTMPText("StatsHeader", details.transform);
@@ -358,13 +358,13 @@ namespace Adventure.Editor.UI
             text.text = name;
             text.fontSize = 18f;
             text.color = Color.white;
-            text.enableWordWrapping = false;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
             return text;
         }
 
         private static GameObject GetOrCreateCanvas()
         {
-            Canvas canvas = Object.FindObjectOfType<Canvas>();
+            Canvas canvas = Object.FindFirstObjectByType<Canvas>();
             if (canvas != null)
             {
                 return canvas.gameObject;
@@ -386,7 +386,7 @@ namespace Adventure.Editor.UI
 
         private static void EnsureEventSystem()
         {
-            EventSystem existing = Object.FindObjectOfType<EventSystem>();
+            EventSystem existing = Object.FindFirstObjectByType<EventSystem>();
             if (existing != null)
             {
                 return;

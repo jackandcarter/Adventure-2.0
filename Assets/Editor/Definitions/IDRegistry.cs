@@ -7,20 +7,31 @@ namespace Adventure.Editor.Definitions
 {
     public static class IDRegistry
     {
-        public static bool IsIdUnique<T>(string id, T current) where T : UnityEngine.Object, IIdentifiableDefinition
+        public static bool IsIdUnique(string id, UnityEngine.Object current)
         {
             if (string.IsNullOrWhiteSpace(id))
             {
                 return true;
             }
 
-            string filter = $"t:{typeof(T).Name}";
+            if (current == null)
+            {
+                return true;
+            }
+
+            System.Type type = current.GetType();
+            if (!typeof(IIdentifiableDefinition).IsAssignableFrom(type))
+            {
+                return true;
+            }
+
+            string filter = $"t:{type.Name}";
             string[] guids = AssetDatabase.FindAssets(filter);
             foreach (string guid in guids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
-                T asset = AssetDatabase.LoadAssetAtPath<T>(path);
-                if (asset != null && asset != current && asset.Id == id)
+                UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath(path, type);
+                if (asset is IIdentifiableDefinition identifiable && asset != current && identifiable.Id == id)
                 {
                     return false;
                 }

@@ -26,7 +26,7 @@ namespace Adventure.Editor.Definitions
                 missing = true;
             }
 
-            if (target is IIdentifiableDefinition identifiable && !IDRegistry.IsIdUnique(idProp.stringValue, (UnityEngine.Object)target))
+            if (target is IIdentifiableDefinition identifiable && !IDRegistry.IsIdUnique(idProp.stringValue, target))
             {
                 string message = $"ID '{idProp.stringValue}' is already used.";
                 EditorGUILayout.HelpBox(message, MessageType.Error);

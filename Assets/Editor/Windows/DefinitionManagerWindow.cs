@@ -154,8 +154,9 @@ namespace Adventure.Editor.Windows
         {
             EditorGUILayout.LabelField(header, EditorStyles.boldLabel);
             EditorGUILayout.BeginVertical("box");
-            foreach (DefinitionEntry<T> entry in entries)
+            for (int i = 0; i < entries.Count; i++)
             {
+                DefinitionEntry<T> entry = entries[i];
                 if (!MatchesFilters(entry.Asset))
                 {
                     continue;
@@ -175,6 +176,8 @@ namespace Adventure.Editor.Windows
                     EditorGUIUtility.PingObject(entry.Asset);
                 }
                 EditorGUILayout.EndHorizontal();
+
+                entries[i] = entry;
 
                 if (expanded)
                 {

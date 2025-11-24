@@ -122,7 +122,7 @@ namespace Adventure.GameData.Registry
         }
 
 #if UNITY_EDITOR
-        internal void SetEntries(IEnumerable<IDRegistry.ClassEntry> classEntries, IEnumerable<IDRegistry.AbilityEntry> abilityEntries)
+        public void SetEntries(IEnumerable<IDRegistry.ClassEntry> classEntries, IEnumerable<IDRegistry.AbilityEntry> abilityEntries)
         {
             classes.Clear();
             abilities.Clear();
