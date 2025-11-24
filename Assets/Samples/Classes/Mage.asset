@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3bb9e17db21e48ecaf3ebebfe641710f, type: 3}
+  m_Name: Mage
+  m_EditorClassIdentifier: 
+  id: class_mage
+  displayName: Mage
+  description: Glass-cannon spellcaster with strong ranged abilities.
+  icon: {fileID: 0}
+  baseStats: {fileID: 11400000, guid: 045f867d3cf44d5fa1b2310a719d6132, type: 2}
+  abilities:
+  - {fileID: 11400000, guid: d7add6fa7d35490f819b19170b50585e, type: 2}
+  - {fileID: 11400000, guid: c39ecaade6454fe28f0f20cb673a672a, type: 2}
+  tags:
+  - Magic
+  - Starter
