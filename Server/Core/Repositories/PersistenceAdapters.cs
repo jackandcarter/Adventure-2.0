@@ -49,33 +49,53 @@ namespace Adventure.Server.Core.Repositories
 
     public class InMemoryLoginTokenRepository : ILoginTokenRepository
     {
-        private readonly ConcurrentDictionary<string, string> tokens = new();
+        private readonly ConcurrentDictionary<string, (string PlayerId, DateTimeOffset ExpiresAt)> tokens = new();
 
-        public string IssueToken(string playerId)
+        public TimeSpan DefaultTtl { get; set; } = TimeSpan.FromMinutes(15);
+
+        public string IssueToken(string playerId, TimeSpan? ttl = null)
         {
             var token = Guid.NewGuid().ToString("N");
-            tokens[token] = playerId;
+            var expiresAt = DateTimeOffset.UtcNow.Add(ttl ?? DefaultTtl);
+            tokens[token] = (playerId, expiresAt);
             return token;
         }
 
         public bool ValidateToken(string token, out string playerId)
         {
-            return tokens.TryGetValue(token, out playerId!);
+            if (tokens.TryGetValue(token, out var tuple) && tuple.ExpiresAt > DateTimeOffset.UtcNow)
+            {
+                playerId = tuple.PlayerId;
+                return true;
+            }
+
+            playerId = string.Empty;
+            return false;
+        }
+
+        public void RevokeToken(string token)
+        {
+            tokens.TryRemove(token, out _);
         }
     }
 
     public class InMemorySessionRepository : ISessionRepository
     {
-        private readonly ConcurrentDictionary<string, string> sessions = new();
+        private readonly ConcurrentDictionary<string, Persistence.SessionStorageRecord> sessions = new();
 
-        public void PersistSession(string sessionId, string playerId)
+        public void PersistSession(Persistence.SessionStorageRecord session)
         {
-            sessions[sessionId] = playerId;
+            sessions[session.SessionId] = session;
         }
 
         public void RemoveSession(string sessionId)
         {
             sessions.TryRemove(sessionId, out _);
+        }
+
+        public IReadOnlyCollection<Persistence.SessionStorageRecord> LoadActiveSessions()
+        {
+            return sessions.Values.ToArray();
         }
     }
 
