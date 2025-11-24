@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Adventure.GameData.Definitions;
 using UnityEngine;
 
@@ -55,6 +57,25 @@ namespace Adventure.GameData.Registry
             }
 
             return Registry.TryGetAbility(id, out AbilityDefinition definition) ? definition : null;
+        }
+
+        public static IReadOnlyList<ClassDefinition> GetAllClasses()
+        {
+            if (Registry == null || Registry.Classes == null)
+            {
+                return Array.Empty<ClassDefinition>();
+            }
+
+            List<ClassDefinition> results = new List<ClassDefinition>();
+            foreach (IDRegistry.ClassEntry entry in Registry.Classes)
+            {
+                if (entry?.Asset != null && !results.Contains(entry.Asset))
+                {
+                    results.Add(entry.Asset);
+                }
+            }
+
+            return results;
         }
     }
 }
