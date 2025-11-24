@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Adventure.Server.Core.Repositories;
+using Adventure.Server.Persistence;
 
 namespace Adventure.Server.Core.Sessions
 {
@@ -27,15 +28,19 @@ namespace Adventure.Server.Core.Sessions
 
         public TimeSpan SessionTtl { get; set; } = TimeSpan.FromMinutes(30);
 
+        public TimeSpan LoginTokenTtl { get; set; } = TimeSpan.FromMinutes(15);
+
         public SessionManager(ILoginTokenRepository loginTokens, ISessionRepository? sessionRepository = null)
         {
             this.loginTokens = loginTokens;
             this.sessionRepository = sessionRepository;
+
+            RestoreFromRepository();
         }
 
         public string IssueLoginToken(string playerId)
         {
-            return loginTokens.IssueToken(playerId);
+            return loginTokens.IssueToken(playerId, LoginTokenTtl);
         }
 
         public bool TryExchangeToken(string token, out SessionRecord session, string? connectionId = null)
@@ -58,7 +63,7 @@ namespace Adventure.Server.Core.Sessions
 
             sessionsById[sessionId] = record;
             sessionIdByPlayer[playerId] = sessionId;
-            sessionRepository?.PersistSession(sessionId, playerId);
+            Persist(record);
 
             if (!string.IsNullOrWhiteSpace(connectionId))
             {
@@ -124,6 +129,7 @@ namespace Adventure.Server.Core.Sessions
                 };
 
                 sessionsById[sessionId] = updated;
+                Persist(updated);
             }
         }
 
@@ -162,6 +168,48 @@ namespace Adventure.Server.Core.Sessions
                     playerIdByConnection.TryRemove(removed.ConnectionId!, out _);
                 }
                 sessionRepository?.RemoveSession(sessionId);
+            }
+        }
+
+        private void Persist(SessionRecord record)
+        {
+            sessionRepository?.PersistSession(new SessionStorageRecord(
+                record.SessionId,
+                record.PlayerId,
+                record.ExpiresAt,
+                record.ConnectionId,
+                record.LastSeenUtc));
+        }
+
+        private void RestoreFromRepository()
+        {
+            if (sessionRepository == null)
+            {
+                return;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            foreach (var stored in sessionRepository.LoadActiveSessions())
+            {
+                if (stored.ExpiresAt <= now)
+                {
+                    sessionRepository.RemoveSession(stored.SessionId);
+                    continue;
+                }
+
+                var record = new SessionRecord(
+                    stored.SessionId,
+                    stored.PlayerId,
+                    stored.ExpiresAt,
+                    stored.ConnectionId,
+                    stored.LastSeenUtc);
+
+                sessionsById[record.SessionId] = record;
+                sessionIdByPlayer[record.PlayerId] = record.SessionId;
+                if (!string.IsNullOrEmpty(record.ConnectionId))
+                {
+                    playerIdByConnection[record.ConnectionId!] = record.PlayerId;
+                }
             }
         }
     }

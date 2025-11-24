@@ -41,12 +41,14 @@ namespace Adventure.Server.Persistence.MariaDb
         {
             using var connection = OpenConnection();
             using var command = connection.CreateCommand();
-            command.CommandText = @"INSERT INTO accounts (account_id, email, display_name, created_at)
-VALUES (@id, @email, @displayName, @createdAt);";
+            command.CommandText = @"INSERT INTO accounts (account_id, email, display_name, password_hash, email_verified, created_at)
+VALUES (@id, @email, @displayName, @passwordHash, @verified, @createdAt);";
 
             AddParameter(command, "@id", account.AccountId);
             AddParameter(command, "@email", account.Email);
             AddParameter(command, "@displayName", account.DisplayName);
+            AddParameter(command, "@passwordHash", account.PasswordHash);
+            AddParameter(command, "@verified", account.EmailVerified);
             AddParameter(command, "@createdAt", account.CreatedAt);
 
             command.ExecuteNonQuery();
@@ -85,12 +87,33 @@ VALUES (@id, @email, @displayName, @createdAt);";
             return MapAccount(reader);
         }
 
+        public void SetPasswordHash(string accountId, string passwordHash)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE accounts SET password_hash = @hash WHERE account_id = @id;";
+            AddParameter(command, "@hash", passwordHash);
+            AddParameter(command, "@id", accountId);
+            command.ExecuteNonQuery();
+        }
+
+        public void MarkEmailVerified(string accountId)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE accounts SET email_verified = 1 WHERE account_id = @id;";
+            AddParameter(command, "@id", accountId);
+            command.ExecuteNonQuery();
+        }
+
         private static AccountRecord MapAccount(IDataRecord reader)
         {
             return new AccountRecord(
                 reader.GetString("account_id"),
                 reader.GetString("email"),
                 reader.GetString("display_name"),
+                reader.GetString("password_hash"),
+                reader.GetInt32("email_verified") == 1,
                 reader.GetDateTime("created_at"));
         }
     }
@@ -416,6 +439,321 @@ ON DUPLICATE KEY UPDATE unlocked_at = VALUES(unlocked_at);";
             }
 
             return unlocks;
+        }
+    }
+
+    public class MariaDbLoginTokenRepository : MariaDbRepository, ILoginTokenRepository
+    {
+        public TimeSpan DefaultTtl { get; set; } = TimeSpan.FromMinutes(15);
+
+        public MariaDbLoginTokenRepository(MariaDbConnectionFactory connectionFactory) : base(connectionFactory)
+        {
+        }
+
+        public string IssueToken(string playerId, TimeSpan? ttl = null)
+        {
+            var token = Guid.NewGuid().ToString("N");
+            var issuedAt = DateTime.UtcNow;
+            var expiresAt = issuedAt.Add(ttl ?? DefaultTtl);
+
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = @"INSERT INTO login_tokens (token, account_id, issued_at, expires_at)
+VALUES (@token, @accountId, @issuedAt, @expiresAt);";
+
+            AddParameter(command, "@token", token);
+            AddParameter(command, "@accountId", playerId);
+            AddParameter(command, "@issuedAt", issuedAt);
+            AddParameter(command, "@expiresAt", expiresAt);
+            command.ExecuteNonQuery();
+
+            return token;
+        }
+
+        public bool ValidateToken(string token, out string playerId)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = @"SELECT account_id, expires_at FROM login_tokens WHERE token = @token LIMIT 1;";
+            AddParameter(command, "@token", token);
+
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                playerId = string.Empty;
+                return false;
+            }
+
+            var expiresAt = reader.GetDateTime("expires_at");
+            if (expiresAt <= DateTime.UtcNow)
+            {
+                playerId = string.Empty;
+                return false;
+            }
+
+            playerId = reader.GetString("account_id");
+            return true;
+        }
+
+        public void RevokeToken(string token)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM login_tokens WHERE token = @token;";
+            AddParameter(command, "@token", token);
+            command.ExecuteNonQuery();
+        }
+    }
+
+    public class MariaDbSessionRepository : MariaDbRepository, ISessionRepository
+    {
+        public MariaDbSessionRepository(MariaDbConnectionFactory connectionFactory) : base(connectionFactory)
+        {
+        }
+
+        public IReadOnlyCollection<SessionStorageRecord> LoadActiveSessions()
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT session_id, account_id, connection_id, expires_at, last_seen FROM sessions;";
+
+            using var reader = command.ExecuteReader();
+            var results = new List<SessionStorageRecord>();
+            while (reader.Read())
+            {
+                results.Add(MapSession(reader));
+            }
+
+            return results;
+        }
+
+        public void PersistSession(SessionStorageRecord session)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = @"INSERT INTO sessions (session_id, account_id, connection_id, expires_at, last_seen)
+VALUES (@id, @accountId, @connectionId, @expiresAt, @lastSeen)
+ON DUPLICATE KEY UPDATE
+    account_id = VALUES(account_id),
+    connection_id = VALUES(connection_id),
+    expires_at = VALUES(expires_at),
+    last_seen = VALUES(last_seen);";
+
+            AddParameter(command, "@id", session.SessionId);
+            AddParameter(command, "@accountId", session.PlayerId);
+            AddParameter(command, "@connectionId", session.ConnectionId);
+            AddParameter(command, "@expiresAt", session.ExpiresAt.UtcDateTime);
+            AddParameter(command, "@lastSeen", session.LastSeenUtc.UtcDateTime);
+            command.ExecuteNonQuery();
+        }
+
+        public void RemoveSession(string sessionId)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM sessions WHERE session_id = @id;";
+            AddParameter(command, "@id", sessionId);
+            command.ExecuteNonQuery();
+        }
+
+        private static SessionStorageRecord MapSession(IDataRecord reader)
+        {
+            var connectionId = reader.IsDBNull(reader.GetOrdinal("connection_id"))
+                ? null
+                : reader.GetString("connection_id");
+
+            return new SessionStorageRecord(
+                reader.GetString("session_id"),
+                reader.GetString("account_id"),
+                new DateTimeOffset(reader.GetDateTime("expires_at")),
+                connectionId,
+                new DateTimeOffset(reader.GetDateTime("last_seen")));
+        }
+    }
+
+    public class MariaDbEmailVerificationRepository : MariaDbRepository, IEmailVerificationRepository
+    {
+        public MariaDbEmailVerificationRepository(MariaDbConnectionFactory connectionFactory) : base(connectionFactory)
+        {
+        }
+
+        public void Create(EmailVerificationRecord record)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = @"INSERT INTO email_verifications (verification_id, account_id, token, expires_at)
+VALUES (@id, @accountId, @token, @expiresAt);";
+
+            AddParameter(command, "@id", record.VerificationId);
+            AddParameter(command, "@accountId", record.AccountId);
+            AddParameter(command, "@token", record.Token);
+            AddParameter(command, "@expiresAt", record.ExpiresAtUtc);
+            command.ExecuteNonQuery();
+        }
+
+        public EmailVerificationRecord? GetByToken(string token)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT verification_id, account_id, token, expires_at, verified_at FROM email_verifications WHERE token = @token LIMIT 1;";
+            AddParameter(command, "@token", token);
+
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                return null;
+            }
+
+            return MapRecord(reader);
+        }
+
+        public void MarkVerified(string verificationId, DateTime verifiedAtUtc)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE email_verifications SET verified_at = @verifiedAt WHERE verification_id = @id;";
+            AddParameter(command, "@verifiedAt", verifiedAtUtc);
+            AddParameter(command, "@id", verificationId);
+            command.ExecuteNonQuery();
+        }
+
+        private static EmailVerificationRecord MapRecord(IDataRecord reader)
+        {
+            return new EmailVerificationRecord(
+                reader.GetString("verification_id"),
+                reader.GetString("account_id"),
+                reader.GetString("token"),
+                reader.GetDateTime("expires_at"),
+                reader.IsDBNull(reader.GetOrdinal("verified_at")) ? null : reader.GetDateTime("verified_at"));
+        }
+    }
+
+    public class MariaDbGameSessionRepository : MariaDbRepository, IGameSessionRepository
+    {
+        public MariaDbGameSessionRepository(MariaDbConnectionFactory connectionFactory) : base(connectionFactory)
+        {
+        }
+
+        public void AddMember(GameSessionMemberRecord member)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = @"INSERT INTO game_session_members (session_id, account_id, join_order, joined_at)
+VALUES (@sessionId, @accountId, @joinOrder, @joinedAt)
+ON DUPLICATE KEY UPDATE join_order = VALUES(join_order), joined_at = VALUES(joined_at);";
+
+            AddParameter(command, "@sessionId", member.SessionId);
+            AddParameter(command, "@accountId", member.AccountId);
+            AddParameter(command, "@joinOrder", member.JoinOrder);
+            AddParameter(command, "@joinedAt", member.JoinedAtUtc);
+            command.ExecuteNonQuery();
+        }
+
+        public void ClearMembers(string sessionId)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM game_session_members WHERE session_id = @sessionId;";
+            AddParameter(command, "@sessionId", sessionId);
+            command.ExecuteNonQuery();
+        }
+
+        public GameSessionRecord Create(GameSessionRecord record)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = @"INSERT INTO game_sessions (session_id, owner_account_id, status, dungeon_id, saved_state_json, created_at, updated_at)
+VALUES (@sessionId, @owner, @status, @dungeonId, @savedState, @createdAt, @updatedAt);";
+
+            AddParameter(command, "@sessionId", record.SessionId);
+            AddParameter(command, "@owner", record.OwnerAccountId);
+            AddParameter(command, "@status", record.Status);
+            AddParameter(command, "@dungeonId", record.DungeonId);
+            AddParameter(command, "@savedState", record.SavedStateJson);
+            AddParameter(command, "@createdAt", record.CreatedAtUtc);
+            AddParameter(command, "@updatedAt", record.UpdatedAtUtc);
+            command.ExecuteNonQuery();
+            return record;
+        }
+
+        public GameSessionRecord? Get(string sessionId)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT session_id, owner_account_id, status, dungeon_id, saved_state_json, created_at, updated_at FROM game_sessions WHERE session_id = @sessionId LIMIT 1;";
+            AddParameter(command, "@sessionId", sessionId);
+
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                return null;
+            }
+
+            return MapSession(reader);
+        }
+
+        public IReadOnlyCollection<GameSessionMemberRecord> GetMembers(string sessionId)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT session_id, account_id, join_order, joined_at FROM game_session_members WHERE session_id = @sessionId ORDER BY join_order;";
+            AddParameter(command, "@sessionId", sessionId);
+
+            using var reader = command.ExecuteReader();
+            var members = new List<GameSessionMemberRecord>();
+            while (reader.Read())
+            {
+                members.Add(new GameSessionMemberRecord(
+                    reader.GetString("session_id"),
+                    reader.GetString("account_id"),
+                    reader.GetInt32("join_order"),
+                    reader.GetDateTime("joined_at")));
+            }
+
+            return members;
+        }
+
+        public void RemoveMember(string sessionId, string accountId)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM game_session_members WHERE session_id = @sessionId AND account_id = @accountId;";
+            AddParameter(command, "@sessionId", sessionId);
+            AddParameter(command, "@accountId", accountId);
+            command.ExecuteNonQuery();
+        }
+
+        public void Update(GameSessionRecord record)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = @"UPDATE game_sessions
+SET owner_account_id = @owner,
+    status = @status,
+    dungeon_id = @dungeonId,
+    saved_state_json = @state,
+    updated_at = @updatedAt
+WHERE session_id = @sessionId;";
+
+            AddParameter(command, "@owner", record.OwnerAccountId);
+            AddParameter(command, "@status", record.Status);
+            AddParameter(command, "@dungeonId", record.DungeonId);
+            AddParameter(command, "@state", record.SavedStateJson);
+            AddParameter(command, "@updatedAt", record.UpdatedAtUtc);
+            AddParameter(command, "@sessionId", record.SessionId);
+            command.ExecuteNonQuery();
+        }
+
+        private static GameSessionRecord MapSession(IDataRecord reader)
+        {
+            return new GameSessionRecord(
+                reader.GetString("session_id"),
+                reader.GetString("owner_account_id"),
+                reader.GetString("status"),
+                reader.IsDBNull(reader.GetOrdinal("dungeon_id")) ? null : reader.GetString("dungeon_id"),
+                reader.IsDBNull(reader.GetOrdinal("saved_state_json")) ? null : reader.GetString("saved_state_json"),
+                reader.GetDateTime("created_at"),
+                reader.GetDateTime("updated_at"));
         }
     }
 

@@ -4,7 +4,13 @@ using Adventure.Server.Simulation;
 
 namespace Adventure.Server.Persistence
 {
-    public record AccountRecord(string AccountId, string Email, string DisplayName, DateTime CreatedAt);
+    public record AccountRecord(
+        string AccountId,
+        string Email,
+        string DisplayName,
+        string PasswordHash,
+        bool EmailVerified,
+        DateTime CreatedAt);
 
     public record CharacterCosmetics(string PrimaryColor, string SecondaryColor, string OutfitId);
 
@@ -62,6 +68,10 @@ namespace Adventure.Server.Persistence
         AccountRecord? GetByEmail(string email);
 
         string Create(AccountRecord account);
+
+        void SetPasswordHash(string accountId, string passwordHash);
+
+        void MarkEmailVerified(string accountId);
     }
 
     public interface ICharacterRepository
@@ -95,6 +105,36 @@ namespace Adventure.Server.Persistence
         void Add(UnlockRecord unlock);
     }
 
+    public interface ILoginTokenRepository
+    {
+        string IssueToken(string playerId, TimeSpan? ttl = null);
+        bool ValidateToken(string token, out string playerId);
+        void RevokeToken(string token);
+    }
+
+    public interface ISessionRepository
+    {
+        void PersistSession(SessionStorageRecord session);
+        void RemoveSession(string sessionId);
+        IReadOnlyCollection<SessionStorageRecord> LoadActiveSessions();
+    }
+
+    public record EmailVerificationRecord(string VerificationId, string AccountId, string Token, DateTime ExpiresAtUtc, DateTime? VerifiedAtUtc);
+
+    public interface IEmailVerificationRepository
+    {
+        void Create(EmailVerificationRecord record);
+        EmailVerificationRecord? GetByToken(string token);
+        void MarkVerified(string verificationId, DateTime verifiedAtUtc);
+    }
+
+    public record SessionStorageRecord(
+        string SessionId,
+        string PlayerId,
+        DateTimeOffset ExpiresAt,
+        string? ConnectionId,
+        DateTimeOffset LastSeenUtc);
+
     public interface IDungeonRunRepository
     {
         DungeonRunRecord BeginRun(string dungeonId, string partyId, DateTime startedAtUtc);
@@ -104,6 +144,28 @@ namespace Adventure.Server.Persistence
         void AppendEvent(RunEventRecord logEvent);
 
         IReadOnlyCollection<RunEventRecord> GetEvents(string runId);
+    }
+
+    public record GameSessionRecord(
+        string SessionId,
+        string OwnerAccountId,
+        string Status,
+        string? DungeonId,
+        string? SavedStateJson,
+        DateTime CreatedAtUtc,
+        DateTime UpdatedAtUtc);
+
+    public record GameSessionMemberRecord(string SessionId, string AccountId, int JoinOrder, DateTime JoinedAtUtc);
+
+    public interface IGameSessionRepository
+    {
+        GameSessionRecord Create(GameSessionRecord record);
+        GameSessionRecord? Get(string sessionId);
+        void Update(GameSessionRecord record);
+        IReadOnlyCollection<GameSessionMemberRecord> GetMembers(string sessionId);
+        void AddMember(GameSessionMemberRecord member);
+        void RemoveMember(string sessionId, string accountId);
+        void ClearMembers(string sessionId);
     }
 
     public interface IMigrationBootstrapper

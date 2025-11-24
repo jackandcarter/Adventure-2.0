@@ -25,14 +25,16 @@ namespace Adventure.Server.Core.Repositories
 
     public interface ISessionRepository
     {
-        void PersistSession(string sessionId, string playerId);
+        void PersistSession(Persistence.SessionStorageRecord session);
         void RemoveSession(string sessionId);
+        IReadOnlyCollection<Persistence.SessionStorageRecord> LoadActiveSessions();
     }
 
     public interface ILoginTokenRepository
     {
-        string IssueToken(string playerId);
+        string IssueToken(string playerId, System.TimeSpan? ttl = null);
         bool ValidateToken(string token, out string playerId);
+        void RevokeToken(string token);
     }
 
     public interface IDungeonRunRepository
