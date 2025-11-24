@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 946ba0ebec344ef98ae719e8235328c8, type: 3}
   m_Name: IDRegistry
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier:
   classes:
   - guid: c2120486202c4d0ebd354e3dccce57b3
     id: class_warrior
@@ -29,3 +29,34 @@ MonoBehaviour:
   - guid: c39ecaade6454fe28f0f20cb673a672a
     id: ability_heal
     asset: {fileID: 11400000, guid: c39ecaade6454fe28f0f20cb673a672a, type: 2}
+  stats:
+  - guid: 677fb0551b5a4ae382c63e1206eebf2f
+    id: stat_attack_power
+    asset: {fileID: 11400000, guid: 677fb0551b5a4ae382c63e1206eebf2f, type: 2}
+  - guid: b45dbb4d17454150b2e41fe0d92486c5
+    id: stat_physical_defense
+    asset: {fileID: 11400000, guid: b45dbb4d17454150b2e41fe0d92486c5, type: 2}
+  - guid: 12b1e3fa91f74318a0183e37f1f18d79
+    id: stat_magic_power
+    asset: {fileID: 11400000, guid: 12b1e3fa91f74318a0183e37f1f18d79, type: 2}
+  - guid: 980373c2dcd14131b717fd48a37be0ec
+    id: stat_magic_defense
+    asset: {fileID: 11400000, guid: 980373c2dcd14131b717fd48a37be0ec, type: 2}
+  - guid: ad9e94c1c87142a382cc8ccf80405269
+    id: stat_accuracy
+    asset: {fileID: 11400000, guid: ad9e94c1c87142a382cc8ccf80405269, type: 2}
+  - guid: 3b30bc1158c949b994e53f2d2bbf1cb8
+    id: stat_evasion
+    asset: {fileID: 11400000, guid: 3b30bc1158c949b994e53f2d2bbf1cb8, type: 2}
+  - guid: 1af438d2c4ec4605ad101be2e89fdbbc
+    id: stat_luck
+    asset: {fileID: 11400000, guid: 1af438d2c4ec4605ad101be2e89fdbbc, type: 2}
+  - guid: 0b69de195f0b4080aeb5bf18713588e2
+    id: stat_speed
+    asset: {fileID: 11400000, guid: 0b69de195f0b4080aeb5bf18713588e2, type: 2}
+  - guid: 2485ff9ae5e14001885d980a2aa86bc8
+    id: stat_health
+    asset: {fileID: 11400000, guid: 2485ff9ae5e14001885d980a2aa86bc8, type: 2}
+  - guid: 0be193173e5844738ab77bd8749c575d
+    id: stat_magic_energy
+    asset: {fileID: 11400000, guid: 0be193173e5844738ab77bd8749c575d, type: 2}

@@ -10,21 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ac213140f4174a6c82665ca404c313d6, type: 3}
-  m_Name: MageBaseStats
-  m_EditorClassIdentifier: 
+  m_Name: Mage Base Stats
+  m_EditorClassIdentifier:
   id: stats_mage_base
   displayName: Mage Base Stats
-  description: Glass-cannon stats tuned for the Mage sample.
+  description: Glass-cannon caster stats covering the full JRPG baseline.
   icon: {fileID: 0}
   stats:
-  - statId: health
-    baseValue: 80
+  - statDefinition: {fileID: 11400000, guid: 2485ff9ae5e14001885d980a2aa86bc8, type: 2}
+    statId: stat_health
+    baseValue: 90
     growthCurve:
       serializedVersion: 2
       m_Curve:
       - serializedVersion: 2
         time: 1
-        value: 80
+        value: 90
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -33,9 +34,9 @@ MonoBehaviour:
         outWeight: 0.33333334
       - serializedVersion: 2
         time: 20
-        value: 150
-        inSlope: 3.5
-        outSlope: 3.5
+        value: 180
+        inSlope: 4.7368421052631575
+        outSlope: 4.7368421052631575
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -45,14 +46,15 @@ MonoBehaviour:
       m_RotationOrder: 4
     useFormula: 0
     formula: "{base} + ({level}-1)"
-  - statId: mana
-    baseValue: 120
+  - statDefinition: {fileID: 11400000, guid: 0be193173e5844738ab77bd8749c575d, type: 2}
+    statId: stat_magic_energy
+    baseValue: 140
     growthCurve:
       serializedVersion: 2
       m_Curve:
       - serializedVersion: 2
         time: 1
-        value: 120
+        value: 140
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -61,9 +63,241 @@ MonoBehaviour:
         outWeight: 0.33333334
       - serializedVersion: 2
         time: 20
-        value: 260
-        inSlope: 7
-        outSlope: 7
+        value: 320
+        inSlope: 9.473684210526315
+        outSlope: 9.473684210526315
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    useFormula: 0
+    formula: "{base} + ({level}-1)"
+  - statDefinition: {fileID: 11400000, guid: 677fb0551b5a4ae382c63e1206eebf2f, type: 2}
+    statId: stat_attack_power
+    baseValue: 10
+    growthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 2
+        time: 1
+        value: 10
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 2
+        time: 20
+        value: 22
+        inSlope: 0.631578947368421
+        outSlope: 0.631578947368421
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    useFormula: 0
+    formula: "{base} + ({level}-1)"
+  - statDefinition: {fileID: 11400000, guid: b45dbb4d17454150b2e41fe0d92486c5, type: 2}
+    statId: stat_physical_defense
+    baseValue: 10
+    growthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 2
+        time: 1
+        value: 10
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 2
+        time: 20
+        value: 20
+        inSlope: 0.5263157894736842
+        outSlope: 0.5263157894736842
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    useFormula: 0
+    formula: "{base} + ({level}-1)"
+  - statDefinition: {fileID: 11400000, guid: 12b1e3fa91f74318a0183e37f1f18d79, type: 2}
+    statId: stat_magic_power
+    baseValue: 24
+    growthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 2
+        time: 1
+        value: 24
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 2
+        time: 20
+        value: 60
+        inSlope: 1.894736842105263
+        outSlope: 1.894736842105263
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    useFormula: 0
+    formula: "{base} + ({level}-1)"
+  - statDefinition: {fileID: 11400000, guid: 980373c2dcd14131b717fd48a37be0ec, type: 2}
+    statId: stat_magic_defense
+    baseValue: 16
+    growthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 2
+        time: 1
+        value: 16
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 2
+        time: 20
+        value: 36
+        inSlope: 1.0526315789473684
+        outSlope: 1.0526315789473684
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    useFormula: 0
+    formula: "{base} + ({level}-1)"
+  - statDefinition: {fileID: 11400000, guid: ad9e94c1c87142a382cc8ccf80405269, type: 2}
+    statId: stat_accuracy
+    baseValue: 90
+    growthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 2
+        time: 1
+        value: 90
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 2
+        time: 20
+        value: 98
+        inSlope: 0.42105263157894735
+        outSlope: 0.42105263157894735
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    useFormula: 0
+    formula: "{base} + ({level}-1)"
+  - statDefinition: {fileID: 11400000, guid: 3b30bc1158c949b994e53f2d2bbf1cb8, type: 2}
+    statId: stat_evasion
+    baseValue: 10
+    growthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 2
+        time: 1
+        value: 10
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 2
+        time: 20
+        value: 22
+        inSlope: 0.631578947368421
+        outSlope: 0.631578947368421
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    useFormula: 0
+    formula: "{base} + ({level}-1)"
+  - statDefinition: {fileID: 11400000, guid: 1af438d2c4ec4605ad101be2e89fdbbc, type: 2}
+    statId: stat_luck
+    baseValue: 12
+    growthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 2
+        time: 1
+        value: 12
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 2
+        time: 20
+        value: 26
+        inSlope: 0.7368421052631579
+        outSlope: 0.7368421052631579
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    useFormula: 0
+    formula: "{base} + ({level}-1)"
+  - statDefinition: {fileID: 11400000, guid: 0b69de195f0b4080aeb5bf18713588e2, type: 2}
+    statId: stat_speed
+    baseValue: 13
+    growthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 2
+        time: 1
+        value: 13
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 2
+        time: 20
+        value: 26
+        inSlope: 0.6842105263157895
+        outSlope: 0.6842105263157895
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
