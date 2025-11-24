@@ -1,4 +1,5 @@
-using Adventure.Networking;
+using System;
+using Adventure.Net;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -21,11 +22,27 @@ namespace Adventure.UI.MainMenu
         [SerializeField]
         private Text statusLabel;
 
-        private NetworkClient networkClient;
+        [SerializeField]
+        private ClientMessagePipeline messagePipeline;
 
-        public void Initialize(NetworkClient client)
+        [SerializeField]
+        private string clientVersion = "0.1.0";
+
+        public event Action<string, string> LoginSubmitted;
+
+        public void Initialize(ClientMessagePipeline pipeline)
         {
-            networkClient = client;
+            messagePipeline = pipeline;
+            WireUi();
+        }
+
+        private void Awake()
+        {
+            if (messagePipeline == null)
+            {
+                messagePipeline = FindObjectOfType<ClientMessagePipeline>();
+            }
+
             WireUi();
         }
 
@@ -40,12 +57,6 @@ namespace Adventure.UI.MainMenu
 
         private void OnSubmit()
         {
-            if (networkClient == null)
-            {
-                UpdateStatus("Network unavailable");
-                return;
-            }
-
             var username = usernameField != null ? usernameField.text : string.Empty;
             var password = passwordField != null ? passwordField.text : string.Empty;
 
@@ -55,8 +66,20 @@ namespace Adventure.UI.MainMenu
                 return;
             }
 
-            networkClient.SendReliable("auth/login", new { user = username, pass = password });
             UpdateStatus("Signing in...");
+            SetInteractable(false);
+
+            if (messagePipeline != null)
+            {
+                messagePipeline.SendAuthRequest(username, password, clientVersion);
+            }
+            else
+            {
+                UpdateStatus("Network unavailable");
+                SetInteractable(true);
+            }
+
+            LoginSubmitted?.Invoke(username, password);
         }
 
         private void UpdateStatus(string message)
@@ -65,6 +88,40 @@ namespace Adventure.UI.MainMenu
             {
                 statusLabel.text = message;
             }
+        }
+
+        public void SetStatus(string message)
+        {
+            UpdateStatus(message);
+        }
+
+        public void SetInteractable(bool enabled)
+        {
+            if (usernameField != null)
+            {
+                usernameField.interactable = enabled;
+            }
+
+            if (passwordField != null)
+            {
+                passwordField.interactable = enabled;
+            }
+
+            if (submitButton != null)
+            {
+                submitButton.interactable = enabled;
+            }
+        }
+
+        public void ShowError(string message)
+        {
+            UpdateStatus(message);
+            SetInteractable(true);
+        }
+
+        public void ShowSuccess(string message)
+        {
+            UpdateStatus(message);
         }
     }
 }
