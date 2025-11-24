@@ -157,7 +157,7 @@ namespace Adventure.Server.Simulation
 
     public class SimulationRoom
     {
-        private readonly AbilityExecutor abilityExecutor;
+        private readonly IAbilityExecutor abilityExecutor;
         private readonly TimeSpan movementReconciliationGrace = TimeSpan.FromMilliseconds(200);
 
         public string RoomId { get; }
