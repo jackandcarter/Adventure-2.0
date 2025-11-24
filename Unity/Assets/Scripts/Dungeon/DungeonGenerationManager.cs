@@ -153,18 +153,18 @@ namespace Adventure.Dungeon
                     }
 
                     bool locked = neighbor.IsLocked || kvp.Value.IsLocked;
-                    layout.Doors.Add(new DungeonDoorState
-                    {
-                        DoorId = doorId,
-                        FromRoomId = kvp.Value.RoomId,
-                        ToRoomId = neighbor.RoomId,
-                        RequiredKeyId = locked ? "dungeon-key" : null,
-                        State = locked ? DoorState.Locked : DoorState.Closed
-                    });
-                    added.Add(doorId);
-                }
-            }
-        }
+                      layout.Doors.Add(new DungeonDoorState
+                      {
+                          DoorId = doorId,
+                          FromRoomId = kvp.Value.RoomId,
+                          ToRoomId = neighbor.RoomId,
+                          RequiredKeyId = locked ? "dungeon-key" : null,
+                          State = locked ? DoorState.Locked : DoorState.Open
+                      });
+                      added.Add(doorId);
+                  }
+              }
+          }
 
         private void PlaceRoom(Vector2Int gridPos, RoomTemplateDefinition template, DungeonLayoutSummary layout, Dictionary<Vector2Int, PlacedRoom> occupied, bool locked, System.Random random, bool isBoss = false, bool isBasement = false)
         {
@@ -178,15 +178,16 @@ namespace Adventure.Dungeon
                 IsBasement = isBasement
             };
 
-            layout.Rooms.Add(new DungeonRoomSummary
-            {
-                RoomId = roomId,
-                TemplateId = template.Id,
-                RoomType = template.RoomType,
-                SequenceIndex = layout.Rooms.Count,
-                GridX = gridPos.x,
-                GridY = gridPos.y
-            });
+              layout.Rooms.Add(new DungeonRoomSummary
+              {
+                  RoomId = roomId,
+                  TemplateId = template.Id,
+                  Archetype = ToArchetype(template.RoomType),
+                  Features = RoomFeature.None,
+                  SequenceIndex = layout.Rooms.Count,
+                  GridX = gridPos.x,
+                  GridY = gridPos.y
+              });
 
             // Include environment defaults so server can validate
             if (template.ToExportModel() is RoomTemplatePayload payload)
@@ -252,6 +253,21 @@ namespace Adventure.Dungeon
             }
 
             return candidates[random.Next(candidates.Count)];
+        }
+
+        private static RoomArchetype ToArchetype(RoomTemplateType type)
+        {
+            return type switch
+            {
+                RoomTemplateType.Safe or RoomTemplateType.Start => RoomArchetype.Safe,
+                RoomTemplateType.Boss => RoomArchetype.Boss,
+                RoomTemplateType.Miniboss => RoomArchetype.MiniBoss,
+                RoomTemplateType.Illusion => RoomArchetype.Illusion,
+                RoomTemplateType.Treasure => RoomArchetype.Treasure,
+                RoomTemplateType.StaircaseDown => RoomArchetype.StairDown,
+                RoomTemplateType.StaircaseUp => RoomArchetype.StairUp,
+                _ => RoomArchetype.Enemy
+            };
         }
 
         private Vector2Int PickDirection(Vector2Int origin, System.Random random, Dictionary<Vector2Int, PlacedRoom> occupied, bool allowVisited = false)

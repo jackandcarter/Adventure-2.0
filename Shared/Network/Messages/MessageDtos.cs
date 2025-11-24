@@ -182,6 +182,29 @@ namespace Adventure.Shared.Network.Messages
         Heal
     }
 
+    [Flags]
+    public enum RoomFeature
+    {
+        None = 0,
+        TreasureChest = 1,
+        Trap = 2,
+        Illusion = 4
+    }
+
+    public enum RoomArchetype
+    {
+        Safe,
+        Enemy,
+        Boss,
+        MiniBoss,
+        Illusion,
+        Trap,
+        StairUp,
+        StairDown,
+        Treasure
+    }
+
+    [Obsolete("Use RoomArchetype for runtime semantics.")]
     public enum RoomTemplateType
     {
         Start,
@@ -197,9 +220,19 @@ namespace Adventure.Shared.Network.Messages
 
     public enum DoorState
     {
-        Closed,
+        Open,
         Locked,
-        Open
+        Sealed
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum KeyTag
+    {
+        None,
+        Bronze,
+        Silver,
+        Gold,
+        Boss
     }
 
     public enum InteractiveStatus
@@ -240,7 +273,10 @@ namespace Adventure.Shared.Network.Messages
         public string TemplateId { get; set; } = string.Empty;
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
-        public RoomTemplateType RoomType { get; set; }
+        public RoomArchetype Archetype { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public RoomFeature Features { get; set; }
 
         public int SequenceIndex { get; set; }
 
@@ -260,6 +296,9 @@ namespace Adventure.Shared.Network.Messages
         public string? RequiredKeyId { get; set; }
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? RequiredKeyTag { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
         public DoorState State { get; set; }
     }
 
@@ -272,6 +311,9 @@ namespace Adventure.Shared.Network.Messages
         public string Kind { get; set; } = string.Empty;
 
         public string? GrantedKeyId { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? GrantedKeyTag { get; set; }
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public InteractiveStatus Status { get; set; }
