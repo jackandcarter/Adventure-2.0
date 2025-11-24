@@ -86,9 +86,13 @@ namespace Adventure.Server.Generation
 
     public class DungeonGenerationSettings
     {
-        public int CombatRooms { get; set; } = 2;
+        public int EnemyRooms { get; set; } = 2;
 
-        public int PuzzleRooms { get; set; } = 1;
+        public int TreasureRooms { get; set; } = 1;
+
+        public bool IncludeMiniboss { get; set; } = true;
+
+        public bool IncludeSecretStaircase { get; set; } = true;
 
         public int Seed { get; set; } = Environment.TickCount;
     }

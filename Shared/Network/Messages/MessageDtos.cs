@@ -185,9 +185,14 @@ namespace Adventure.Shared.Network.Messages
     public enum RoomTemplateType
     {
         Start,
-        Combat,
-        Puzzle,
-        Boss
+        Safe,
+        Enemy,
+        Illusion,
+        Treasure,
+        Miniboss,
+        Boss,
+        StaircaseUp,
+        StaircaseDown
     }
 
     public enum DoorState
@@ -238,6 +243,10 @@ namespace Adventure.Shared.Network.Messages
         public RoomTemplateType RoomType { get; set; }
 
         public int SequenceIndex { get; set; }
+
+        public int GridX { get; set; }
+
+        public int GridY { get; set; }
     }
 
     public class DungeonDoorState

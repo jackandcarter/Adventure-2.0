@@ -232,11 +232,117 @@ namespace Adventure.ScriptableObjects
     }
 
     [Serializable]
+    public class AbilityUnlock
+    {
+        public string AbilityId = string.Empty;
+        public int UnlockLevel = 1;
+        public int HotbarIndex = -1;
+
+        public void Validate(string owner, List<string> errors)
+        {
+            if (string.IsNullOrWhiteSpace(AbilityId))
+            {
+                errors.Add($"{owner}: Ability unlock entries must specify an ability id.");
+            }
+
+            if (UnlockLevel <= 0)
+            {
+                errors.Add($"{owner}: Unlock level must be positive.");
+            }
+
+            if (HotbarIndex < -1)
+            {
+                errors.Add($"{owner}: Hotbar index cannot be negative (use -1 to auto-place).");
+            }
+        }
+    }
+
+    [Serializable]
     public enum StatusStackBehavior
     {
         Refresh,
         Extend,
         Stack
+    }
+
+    [Serializable]
+    public enum ItemRarity
+    {
+        Common,
+        Uncommon,
+        Rare,
+        Epic,
+        Legendary
+    }
+
+    [Serializable]
+    public enum ItemUsageContext
+    {
+        Anywhere,
+        InCombatOnly,
+        OutOfCombatOnly
+    }
+
+    [CreateAssetMenu(menuName = "Adventure/Definitions/Item", fileName = "ItemDefinition")]
+    public class ItemDefinition : IdentifiedDefinition
+    {
+        [SerializeField]
+        private string description = string.Empty;
+
+        [SerializeField]
+        [Tooltip("Maximum number of items per stack.")]
+        private int maxStackSize = 99;
+
+        [SerializeField]
+        [Tooltip("Whether the item can be consumed from the inventory UI.")]
+        private bool consumable;
+
+        [SerializeField]
+        [Tooltip("Where this item is allowed to be used.")]
+        private ItemUsageContext usageContext = ItemUsageContext.Anywhere;
+
+        [SerializeField]
+        [Tooltip("Optional key id if this item is a key.")]
+        private string keyId = string.Empty;
+
+        [SerializeField]
+        private ItemRarity rarity = ItemRarity.Common;
+
+        public int MaxStackSize => maxStackSize;
+        public bool Consumable => consumable;
+        public ItemUsageContext UsageContext => usageContext;
+        public string KeyId => keyId;
+        public ItemRarity Rarity => rarity;
+        public string Description => description;
+
+        public override void Validate(List<string> errors)
+        {
+            base.Validate(errors);
+            if (maxStackSize <= 0 || maxStackSize > 99)
+            {
+                errors.Add($"{name}: Max stack size must be between 1 and 99.");
+            }
+
+            if (!string.IsNullOrEmpty(keyId) && !consumable)
+            {
+                errors.Add($"{name}: Key items should be marked consumable so they can be spent.");
+            }
+        }
+
+        public override object ToExportModel()
+        {
+            return new ItemDefinitionPayload
+            {
+                Id = Id,
+                DisplayName = DisplayName,
+                Description = description,
+                MaxStackSize = maxStackSize,
+                Consumable = consumable,
+                UsageContext = usageContext,
+                KeyId = keyId,
+                Rarity = rarity
+            };
+        }
     }
 
     [Flags]
@@ -328,8 +434,15 @@ namespace Adventure.ScriptableObjects
         private List<string> startingAbilities = new();
 
         [SerializeField]
+        [Tooltip("Progressive ability unlock schedule by level.")]
+        private List<AbilityUnlock> abilityUnlocks = new();
+
+        [SerializeField]
         [Tooltip("Status effect ids applied while the class is active.")]
         private List<string> passiveStatusEffects = new();
+
+        public IReadOnlyList<string> StartingAbilities => startingAbilities;
+        public IReadOnlyList<AbilityUnlock> AbilityUnlocks => abilityUnlocks;
 
         public override void Validate(List<string> errors)
         {
@@ -338,6 +451,11 @@ namespace Adventure.ScriptableObjects
             if (startingAbilities.Count == 0)
             {
                 errors.Add($"{name}: At least one starting ability is required.");
+            }
+
+            foreach (var unlock in abilityUnlocks)
+            {
+                unlock.Validate(name, errors);
             }
         }
 
@@ -349,7 +467,8 @@ namespace Adventure.ScriptableObjects
                 DisplayName = DisplayName,
                 BaseStats = baseStats,
                 StartingAbilities = startingAbilities,
-                PassiveStatusEffects = passiveStatusEffects
+                PassiveStatusEffects = passiveStatusEffects,
+                AbilityUnlocks = abilityUnlocks
             };
         }
     }
@@ -561,7 +680,7 @@ namespace Adventure.ScriptableObjects
     public class RoomTemplateDefinition : IdentifiedDefinition
     {
         [SerializeField]
-        private RoomTemplateType roomType = RoomTemplateType.Combat;
+        private RoomTemplateType roomType = RoomTemplateType.Enemy;
 
         [SerializeField]
         [Tooltip("Optional prefab used for authoring.")]
@@ -585,7 +704,26 @@ namespace Adventure.ScriptableObjects
         [SerializeField]
         private List<EnvironmentStateDefinition> environmentStates = new();
 
+        [SerializeField]
+        [Tooltip("If true, this room template will never be locked.")]
+        private bool neverLocked = false;
+
+        [SerializeField]
+        [Tooltip("If true, this template may appear as a locked variant.")]
+        private bool allowsLockedVariant = false;
+
+        [SerializeField]
+        [Tooltip("If set, this room template can spawn a secret staircase connection.")]
+        private bool canSpawnSecretStaircase = false;
+
         public GameObject? RoomPrefab => roomPrefab;
+        public RoomTemplateType RoomType => roomType;
+        public bool NeverLocked => neverLocked;
+        public bool AllowsLockedVariant => allowsLockedVariant;
+        public bool CanSpawnSecretStaircase => canSpawnSecretStaircase;
+        public List<string> ProvidesKeys => providesKeys;
+        public List<SpawnPointDefinition> SpawnPoints => spawnPoints;
+        public List<DoorDefinition> Doors => doors;
 
         public override void Validate(List<string> errors)
         {
@@ -625,6 +763,16 @@ namespace Adventure.ScriptableObjects
                 Adventure.EditorTools.RoomPrefabValidator.Validate(roomPrefab, errors);
             }
 #endif
+
+            if (roomType == RoomTemplateType.Safe && (allowsLockedVariant || !neverLocked))
+            {
+                errors.Add($"{name}: Safe rooms must never be locked.");
+            }
+
+            if (roomType == RoomTemplateType.Boss && doors.Count < 1)
+            {
+                errors.Add($"{name}: Boss rooms should expose at least one door to connect to the path.");
+            }
         }
 
         public override object ToExportModel()
@@ -639,7 +787,10 @@ namespace Adventure.ScriptableObjects
                 Triggers = triggers,
                 InteractiveObjects = interactiveObjects,
                 ProvidesKeys = providesKeys,
-                EnvironmentStates = environmentStates
+                EnvironmentStates = environmentStates,
+                NeverLocked = neverLocked,
+                AllowsLockedVariant = allowsLockedVariant,
+                CanSpawnSecretStaircase = canSpawnSecretStaircase
             };
         }
     }
@@ -657,6 +808,10 @@ namespace Adventure.ScriptableObjects
         [SerializeField]
         [Tooltip("Ability ids that can appear as room objectives or rewards.")]
         private List<string> featuredAbilities = new();
+
+        public List<RoomTemplateDefinition> RoomTemplates => roomTemplates;
+        public List<string> EnemyArchetypeIds => enemyArchetypeIds;
+        public List<string> FeaturedAbilities => featuredAbilities;
 
         public override void Validate(List<string> errors)
         {
@@ -737,6 +892,20 @@ namespace Adventure.ScriptableObjects
         public BaseStats BaseStats { get; set; } = new();
         public List<string> StartingAbilities { get; set; } = new();
         public List<string> PassiveStatusEffects { get; set; } = new();
+        public List<AbilityUnlock> AbilityUnlocks { get; set; } = new();
+    }
+
+    [Serializable]
+    public class ItemDefinitionPayload
+    {
+        public string Id { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int MaxStackSize { get; set; }
+        public bool Consumable { get; set; }
+        public ItemUsageContext UsageContext { get; set; }
+        public string KeyId { get; set; } = string.Empty;
+        public ItemRarity Rarity { get; set; } = ItemRarity.Common;
     }
 
     [Serializable]
@@ -769,6 +938,9 @@ namespace Adventure.ScriptableObjects
         public List<InteractiveObjectDefinition> InteractiveObjects { get; set; } = new();
         public List<string> ProvidesKeys { get; set; } = new();
         public List<EnvironmentStateDefinition> EnvironmentStates { get; set; } = new();
+        public bool NeverLocked { get; set; }
+        public bool AllowsLockedVariant { get; set; }
+        public bool CanSpawnSecretStaircase { get; set; }
     }
 
     [Serializable]
