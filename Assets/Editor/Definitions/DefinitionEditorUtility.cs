@@ -61,13 +61,18 @@ namespace Adventure.Editor.Definitions
 
         public static void DrawStatGrowth(SerializedProperty statProperty, ref int previewLevel)
         {
+            SerializedProperty statDefinitionProp = statProperty.FindPropertyRelative("statDefinition");
             SerializedProperty statIdProp = statProperty.FindPropertyRelative("statId");
             SerializedProperty baseValueProp = statProperty.FindPropertyRelative("baseValue");
             SerializedProperty growthCurveProp = statProperty.FindPropertyRelative("growthCurve");
             SerializedProperty useFormulaProp = statProperty.FindPropertyRelative("useFormula");
             SerializedProperty formulaProp = statProperty.FindPropertyRelative("formula");
 
-            EditorGUILayout.PropertyField(statIdProp);
+            EditorGUILayout.PropertyField(statDefinitionProp);
+            using (new EditorGUI.DisabledScope(statDefinitionProp.objectReferenceValue != null))
+            {
+                EditorGUILayout.PropertyField(statIdProp);
+            }
             EditorGUILayout.PropertyField(baseValueProp);
 
             EditorGUILayout.PropertyField(useFormulaProp, new GUIContent("Use Formula"));

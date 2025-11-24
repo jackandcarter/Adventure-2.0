@@ -19,6 +19,12 @@ namespace Adventure.Editor.Definitions
             CreateAsset<AbilityDefinition>("NewAbilityDefinition");
         }
 
+        [MenuItem("Tools/Adventure/Create/Stat Definition")]
+        public static void CreateStatDefinition()
+        {
+            CreateAsset<StatDefinition>("NewStatDefinition");
+        }
+
         [MenuItem("Tools/Adventure/Create/Stat Block")]
         public static void CreateStatBlock()
         {

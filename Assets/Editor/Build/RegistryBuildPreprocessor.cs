@@ -29,10 +29,10 @@ namespace Adventure.Editor.Build
             }
 
             FrozenDefinitionRegistry frozenRegistry = GetOrCreateFrozenRegistry();
-            frozenRegistry.SetEntries(editorRegistry.Classes, editorRegistry.Abilities);
+            frozenRegistry.SetEntries(editorRegistry.Classes, editorRegistry.Abilities, editorRegistry.Stats);
             EditorUtility.SetDirty(frozenRegistry);
 
-            ValidateEntriesAreRuntimeSafe(editorRegistry.Classes, editorRegistry.Abilities);
+            ValidateEntriesAreRuntimeSafe(editorRegistry.Classes, editorRegistry.Abilities, editorRegistry.Stats);
             ValidateAddressables(editorRegistry, frozenRegistry);
 
             AssetDatabase.SaveAssets();
@@ -50,7 +50,7 @@ namespace Adventure.Editor.Build
             return registry;
         }
 
-        private static void ValidateEntriesAreRuntimeSafe(IEnumerable<IDRegistry.ClassEntry> classes, IEnumerable<IDRegistry.AbilityEntry> abilities)
+        private static void ValidateEntriesAreRuntimeSafe(IEnumerable<IDRegistry.ClassEntry> classes, IEnumerable<IDRegistry.AbilityEntry> abilities, IEnumerable<IDRegistry.StatEntry> stats)
         {
             foreach (IDRegistry.ClassEntry classEntry in classes)
             {
@@ -60,6 +60,11 @@ namespace Adventure.Editor.Build
             foreach (IDRegistry.AbilityEntry abilityEntry in abilities)
             {
                 EnsureRuntimeAsset(abilityEntry.Id, abilityEntry.Asset);
+            }
+
+            foreach (IDRegistry.StatEntry statEntry in stats)
+            {
+                EnsureRuntimeAsset(statEntry.Id, statEntry.Asset);
             }
         }
 
@@ -115,6 +120,14 @@ namespace Adventure.Editor.Build
                 if (!IsAddressable(settings, findEntryMethod, abilityEntry.Asset))
                 {
                     missing.Add($"Ability '{abilityEntry.Id}' ({AssetDatabase.GetAssetPath(abilityEntry.Asset)})");
+                }
+            }
+
+            foreach (IDRegistry.StatEntry statEntry in editorRegistry.Stats)
+            {
+                if (!IsAddressable(settings, findEntryMethod, statEntry.Asset))
+                {
+                    missing.Add($"Stat '{statEntry.Id}' ({AssetDatabase.GetAssetPath(statEntry.Asset)})");
                 }
             }
 

@@ -182,7 +182,8 @@ namespace Adventure.UI.ClassSelection
                 TMP_Text[] labels = entry.GetComponentsInChildren<TMP_Text>();
                 if (labels.Length > 0)
                 {
-                    labels[0].text = stat.StatId;
+                    string statName = DefinitionDB.GetStat(stat.StatId)?.DisplayName;
+                    labels[0].text = string.IsNullOrWhiteSpace(statName) ? stat.StatId : statName;
                 }
 
                 if (labels.Length > 1)

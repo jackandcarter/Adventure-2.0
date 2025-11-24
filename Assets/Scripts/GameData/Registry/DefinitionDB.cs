@@ -104,6 +104,22 @@ namespace Adventure.GameData.Registry
             return definition;
         }
 
+        public static StatDefinition GetStat(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                Debug.LogError("DefinitionDB.GetStat was called with a null or empty id.");
+                return null;
+            }
+
+            if (!TryGetStatDefinition(id, out StatDefinition definition))
+            {
+                return null;
+            }
+
+            return definition;
+        }
+
         public static IReadOnlyList<ClassDefinition> GetAllClasses()
         {
             FrozenDefinitionRegistry frozenRegistry = FrozenRegistry;
@@ -130,6 +146,35 @@ namespace Adventure.GameData.Registry
             return results;
 #else
             return Array.Empty<ClassDefinition>();
+#endif
+        }
+
+        public static IReadOnlyList<StatDefinition> GetAllStats()
+        {
+            FrozenDefinitionRegistry frozenRegistry = FrozenRegistry;
+            if (frozenRegistry != null)
+            {
+                return frozenRegistry.GetAllStats();
+            }
+
+#if UNITY_EDITOR
+            if (EditorRegistry == null || EditorRegistry.Stats == null)
+            {
+                return Array.Empty<StatDefinition>();
+            }
+
+            List<StatDefinition> results = new List<StatDefinition>();
+            foreach (IDRegistry.StatEntry entry in EditorRegistry.Stats)
+            {
+                if (entry?.Asset != null && !results.Contains(entry.Asset))
+                {
+                    results.Add(entry.Asset);
+                }
+            }
+
+            return results;
+#else
+            return Array.Empty<StatDefinition>();
 #endif
         }
 
@@ -162,6 +207,25 @@ namespace Adventure.GameData.Registry
 
 #if UNITY_EDITOR
             if (EditorRegistry != null && EditorRegistry.TryGetAbility(id, out definition))
+            {
+                return true;
+            }
+#endif
+
+            definition = null;
+            return false;
+        }
+
+        private static bool TryGetStatDefinition(string id, out StatDefinition definition)
+        {
+            FrozenDefinitionRegistry frozenRegistry = FrozenRegistry;
+            if (frozenRegistry != null && frozenRegistry.TryGetStat(id, out definition))
+            {
+                return true;
+            }
+
+#if UNITY_EDITOR
+            if (EditorRegistry != null && EditorRegistry.TryGetStat(id, out definition))
             {
                 return true;
             }

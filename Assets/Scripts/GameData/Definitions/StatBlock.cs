@@ -40,11 +40,29 @@ namespace Adventure.GameData.Definitions
             id = newId;
             displayName = newDisplayName;
         }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            if (stats == null)
+            {
+                return;
+            }
+
+            foreach (StatGrowth stat in stats)
+            {
+                stat?.SyncIdFromDefinition();
+            }
+        }
+#endif
     }
 
     [Serializable]
     public class StatGrowth
     {
+        [SerializeField]
+        private StatDefinition statDefinition;
+
         [SerializeField]
         private string statId;
 
@@ -60,7 +78,9 @@ namespace Adventure.GameData.Definitions
         [SerializeField]
         private string formula = "{base} + ({level}-1)";
 
-        public string StatId => statId;
+        public StatDefinition StatDefinition => statDefinition;
+
+        public string StatId => !string.IsNullOrWhiteSpace(statDefinition?.Id) ? statDefinition.Id : statId;
 
         public float BaseValue => baseValue;
 
@@ -69,6 +89,16 @@ namespace Adventure.GameData.Definitions
         public bool UseFormula => useFormula;
 
         public string Formula => formula;
+
+#if UNITY_EDITOR
+        public void SyncIdFromDefinition()
+        {
+            if (statDefinition != null)
+            {
+                statId = statDefinition.Id;
+            }
+        }
+#endif
 
         public float Evaluate(int level)
         {
