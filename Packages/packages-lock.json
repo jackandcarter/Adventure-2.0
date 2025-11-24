@@ -163,6 +163,15 @@
         "com.unity.modules.jsonserialize": "1.0.0"
       }
     },
+    "com.unity.textmeshpro": {
+      "version": "3.0.9",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.ugui": "2.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
     "com.unity.test-framework.performance": {
       "version": "3.2.0",
       "depth": 3,
