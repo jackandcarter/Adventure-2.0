@@ -11,40 +11,66 @@ namespace Adventure.GameData.Registry
 {
     public static class DefinitionDB
     {
-        private const string RegistryResourcePath = "Registry/IDRegistry";
+        private const string FrozenRegistryResourcePath = "Registry/FrozenIDRegistry";
+        private const string EditorRegistryResourcePath = "Registry/IDRegistry";
 #if UNITY_EDITOR
-        private const string RegistryAssetPath = "Assets/Resources/Registry/IDRegistry.asset";
+        private const string FrozenRegistryAssetPath = "Assets/Resources/Registry/FrozenIDRegistry.asset";
+        private const string EditorRegistryAssetPath = "Assets/Resources/Registry/IDRegistry.asset";
 #endif
 
-        private static IDRegistry cachedRegistry;
+        private static FrozenDefinitionRegistry cachedFrozenRegistry;
+        private static IDRegistry cachedEditorRegistry;
         private static bool reportedMissingRegistry;
 
-        private static IDRegistry Registry
+        private static FrozenDefinitionRegistry FrozenRegistry
         {
             get
             {
-                if (cachedRegistry != null)
+                if (cachedFrozenRegistry != null)
                 {
-                    return cachedRegistry;
+                    return cachedFrozenRegistry;
                 }
 
 #if UNITY_EDITOR
-                cachedRegistry = AssetDatabase.LoadAssetAtPath<IDRegistry>(RegistryAssetPath);
-                if (cachedRegistry != null)
+                cachedFrozenRegistry = AssetDatabase.LoadAssetAtPath<FrozenDefinitionRegistry>(FrozenRegistryAssetPath);
+                if (cachedFrozenRegistry != null)
                 {
-                    return cachedRegistry;
+                    return cachedFrozenRegistry;
                 }
 #endif
-                cachedRegistry = Resources.Load<IDRegistry>(RegistryResourcePath);
-                if (cachedRegistry == null && !reportedMissingRegistry)
+
+                cachedFrozenRegistry = Resources.Load<FrozenDefinitionRegistry>(FrozenRegistryResourcePath);
+                if (cachedFrozenRegistry == null && !reportedMissingRegistry)
                 {
-                    Debug.LogError($"Failed to load IDRegistry from resources path '{RegistryResourcePath}'. Ensure the registry asset exists.");
+                    Debug.LogError($"Failed to load frozen registry from resources path '{FrozenRegistryResourcePath}'. Ensure the registry asset exists.");
                     reportedMissingRegistry = true;
                 }
 
-                return cachedRegistry;
+                return cachedFrozenRegistry;
             }
         }
+
+#if UNITY_EDITOR
+        private static IDRegistry EditorRegistry
+        {
+            get
+            {
+                if (cachedEditorRegistry != null)
+                {
+                    return cachedEditorRegistry;
+                }
+
+                cachedEditorRegistry = AssetDatabase.LoadAssetAtPath<IDRegistry>(EditorRegistryAssetPath);
+                if (cachedEditorRegistry != null)
+                {
+                    return cachedEditorRegistry;
+                }
+
+                cachedEditorRegistry = Resources.Load<IDRegistry>(EditorRegistryResourcePath);
+                return cachedEditorRegistry;
+            }
+        }
+#endif
 
         public static ClassDefinition GetClass(string id)
         {
@@ -54,12 +80,12 @@ namespace Adventure.GameData.Registry
                 return null;
             }
 
-            if (Registry == null)
+            if (!TryGetClassDefinition(id, out ClassDefinition definition))
             {
                 return null;
             }
 
-            return Registry.TryGetClass(id, out ClassDefinition definition) ? definition : null;
+            return definition;
         }
 
         public static AbilityDefinition GetAbility(string id)
@@ -70,23 +96,30 @@ namespace Adventure.GameData.Registry
                 return null;
             }
 
-            if (Registry == null)
+            if (!TryGetAbilityDefinition(id, out AbilityDefinition definition))
             {
                 return null;
             }
 
-            return Registry.TryGetAbility(id, out AbilityDefinition definition) ? definition : null;
+            return definition;
         }
 
         public static IReadOnlyList<ClassDefinition> GetAllClasses()
         {
-            if (Registry == null || Registry.Classes == null)
+            FrozenDefinitionRegistry frozenRegistry = FrozenRegistry;
+            if (frozenRegistry != null)
+            {
+                return frozenRegistry.GetAllClasses();
+            }
+
+#if UNITY_EDITOR
+            if (EditorRegistry == null || EditorRegistry.Classes == null)
             {
                 return Array.Empty<ClassDefinition>();
             }
 
             List<ClassDefinition> results = new List<ClassDefinition>();
-            foreach (IDRegistry.ClassEntry entry in Registry.Classes)
+            foreach (IDRegistry.ClassEntry entry in EditorRegistry.Classes)
             {
                 if (entry?.Asset != null && !results.Contains(entry.Asset))
                 {
@@ -95,6 +128,47 @@ namespace Adventure.GameData.Registry
             }
 
             return results;
+#else
+            return Array.Empty<ClassDefinition>();
+#endif
+        }
+
+        private static bool TryGetClassDefinition(string id, out ClassDefinition definition)
+        {
+            FrozenDefinitionRegistry frozenRegistry = FrozenRegistry;
+            if (frozenRegistry != null && frozenRegistry.TryGetClass(id, out definition))
+            {
+                return true;
+            }
+
+#if UNITY_EDITOR
+            if (EditorRegistry != null && EditorRegistry.TryGetClass(id, out definition))
+            {
+                return true;
+            }
+#endif
+
+            definition = null;
+            return false;
+        }
+
+        private static bool TryGetAbilityDefinition(string id, out AbilityDefinition definition)
+        {
+            FrozenDefinitionRegistry frozenRegistry = FrozenRegistry;
+            if (frozenRegistry != null && frozenRegistry.TryGetAbility(id, out definition))
+            {
+                return true;
+            }
+
+#if UNITY_EDITOR
+            if (EditorRegistry != null && EditorRegistry.TryGetAbility(id, out definition))
+            {
+                return true;
+            }
+#endif
+
+            definition = null;
+            return false;
         }
     }
 }
