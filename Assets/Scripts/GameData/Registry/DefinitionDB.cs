@@ -17,6 +17,7 @@ namespace Adventure.GameData.Registry
 #endif
 
         private static IDRegistry cachedRegistry;
+        private static bool reportedMissingRegistry;
 
         private static IDRegistry Registry
         {
@@ -35,13 +36,25 @@ namespace Adventure.GameData.Registry
                 }
 #endif
                 cachedRegistry = Resources.Load<IDRegistry>(RegistryResourcePath);
+                if (cachedRegistry == null && !reportedMissingRegistry)
+                {
+                    Debug.LogError($"Failed to load IDRegistry from resources path '{RegistryResourcePath}'. Ensure the registry asset exists.");
+                    reportedMissingRegistry = true;
+                }
+
                 return cachedRegistry;
             }
         }
 
         public static ClassDefinition GetClass(string id)
         {
-            if (Registry == null || string.IsNullOrWhiteSpace(id))
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                Debug.LogError("DefinitionDB.GetClass was called with a null or empty id.");
+                return null;
+            }
+
+            if (Registry == null)
             {
                 return null;
             }
@@ -51,7 +64,13 @@ namespace Adventure.GameData.Registry
 
         public static AbilityDefinition GetAbility(string id)
         {
-            if (Registry == null || string.IsNullOrWhiteSpace(id))
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                Debug.LogError("DefinitionDB.GetAbility was called with a null or empty id.");
+                return null;
+            }
+
+            if (Registry == null)
             {
                 return null;
             }
