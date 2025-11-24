@@ -21,21 +21,8 @@ namespace Adventure.Server.Generation
                 throw new InvalidOperationException("Dungeon template contains no rooms.");
             }
 
-            var startRoomTemplate = ChooseRoom(template.Rooms, RoomTemplateType.Safe)
-                ?? ChooseRoom(template.Rooms, RoomTemplateType.Start)
-                ?? throw new InvalidOperationException("Dungeon template requires at least one safe/start room.");
-            var bossRoomTemplate = ChooseRoom(template.Rooms, RoomTemplateType.Boss)
-                ?? throw new InvalidOperationException("Dungeon template requires at least one boss room.");
-
-            var enemyRooms = ChooseRooms(template.Rooms, RoomTemplateType.Enemy, settings.EnemyRooms);
-            var treasureRooms = ChooseRooms(template.Rooms, RoomTemplateType.Treasure, settings.TreasureRooms);
-            var minibossRooms = settings.IncludeMiniboss ? ChooseRooms(template.Rooms, RoomTemplateType.Miniboss, 1) : Array.Empty<RoomTemplate>();
-
-            var orderedTemplates = new List<RoomTemplate> { startRoomTemplate };
-            orderedTemplates.AddRange(enemyRooms);
-            orderedTemplates.AddRange(treasureRooms);
-            orderedTemplates.AddRange(minibossRooms);
-            orderedTemplates.Add(bossRoomTemplate);
+            var archetypePlan = BuildArchetypePlan(settings);
+            var orderedTemplates = ChooseTemplatesForArchetypes(template.Rooms, archetypePlan);
 
             var generatedRooms = new List<GeneratedRoom>();
             var generatedDoors = new List<GeneratedDoor>();
@@ -45,9 +32,10 @@ namespace Adventure.Server.Generation
 
             for (var i = 0; i < orderedTemplates.Count; i++)
             {
-                var templateRoom = orderedTemplates[i];
+                var (templateRoom, archetype) = orderedTemplates[i];
                 var roomId = $"{templateRoom.TemplateId}-{i + 1}";
-                var generatedRoom = new GeneratedRoom(roomId, templateRoom, i);
+                var features = ApplyArchetypeFeatures(templateRoom.Features, archetype);
+                var generatedRoom = new GeneratedRoom(roomId, templateRoom, i, archetype, features);
                 generatedRooms.Add(generatedRoom);
 
                 foreach (var env in templateRoom.EnvironmentStates)
@@ -72,7 +60,9 @@ namespace Adventure.Server.Generation
                         RoomId = roomId,
                         Kind = interactive.Kind,
                         GrantsKeyId = interactive.GrantsKeyId,
+                        GrantsKeyTag = interactive.GrantsKeyTag,
                         RequiresKeyId = interactive.RequiresKeyId,
+                        RequiresKeyTag = interactive.RequiresKeyTag,
                         ActivatesTriggerId = interactive.ActivatesTriggerId
                     };
 
@@ -99,12 +89,25 @@ namespace Adventure.Server.Generation
                 {
                     DoorId = $"{fromRoom.RoomId}-to-{toRoom.RoomId}",
                     SocketId = "exit",
-                    StartsLocked = false
+                    StartsLocked = false,
+                    ConfigId = "default"
                 };
 
-                if (!string.IsNullOrWhiteSpace(templateDoor.RequiredKeyId) && !placedKeys.Contains(templateDoor.RequiredKeyId))
+                var requiredKeyId = templateDoor.RequiredKeyId;
+                if (templateDoor.RequiredKeyTag.HasValue && string.IsNullOrWhiteSpace(requiredKeyId))
                 {
-                    PlaceKeyInPreviousRoom(generatedRooms, generatedInteractives, placedKeys, i, templateDoor.RequiredKeyId);
+                    requiredKeyId = $"{templateDoor.RequiredKeyTag.Value.ToString().ToLowerInvariant()}-{i + 1}";
+                }
+
+                if (!string.IsNullOrWhiteSpace(requiredKeyId) && !placedKeys.Contains(requiredKeyId))
+                {
+                    PlaceKeyInPreviousRoom(
+                        generatedRooms,
+                        generatedInteractives,
+                        placedKeys,
+                        i,
+                        requiredKeyId!,
+                        templateDoor.RequiredKeyTag);
                 }
 
                 var door = new GeneratedDoor
@@ -112,36 +115,89 @@ namespace Adventure.Server.Generation
                     DoorId = templateDoor.DoorId,
                     FromRoomId = fromRoom.RoomId,
                     ToRoomId = toRoom.RoomId,
-                    RequiredKeyId = templateDoor.RequiredKeyId,
-                    State = templateDoor.StartsLocked || !string.IsNullOrWhiteSpace(templateDoor.RequiredKeyId)
+                    RequiredKeyId = requiredKeyId,
+                    RequiredKeyTag = templateDoor.RequiredKeyTag,
+                    State = templateDoor.StartsLocked || !string.IsNullOrWhiteSpace(requiredKeyId)
                         ? DoorState.Locked
-                        : DoorState.Closed
+                        : DoorState.Open,
+                    ConfigId = templateDoor.ConfigId
                 };
 
                 fromRoom.Doors.Add(door);
                 generatedDoors.Add(door);
             }
 
-            return new GeneratedDungeon(template.DungeonId, generatedRooms, generatedDoors, generatedInteractives, generatedEnvironmentStates);
+            return new GeneratedDungeon(
+                template.DungeonId,
+                generatedRooms,
+                generatedDoors,
+                generatedInteractives,
+                generatedEnvironmentStates,
+                template.DoorConfigs);
         }
 
-        private RoomTemplate? ChooseRoom(IEnumerable<RoomTemplate> rooms, RoomTemplateType type)
+        private List<(RoomTemplate Template, RoomArchetype Archetype)> ChooseTemplatesForArchetypes(
+            IReadOnlyList<RoomTemplate> templates,
+            IReadOnlyList<RoomArchetype> archetypes)
         {
-            var matching = rooms.Where(r => r.RoomType == type).ToList();
-            return matching.Count == 0 ? null : matching[random.Next(matching.Count)];
-        }
-
-        private IEnumerable<RoomTemplate> ChooseRooms(IEnumerable<RoomTemplate> rooms, RoomTemplateType type, int count)
-        {
-            var matching = rooms.Where(r => r.RoomType == type).ToList();
-            if (matching.Count == 0 || count <= 0)
+            var list = new List<(RoomTemplate, RoomArchetype)>();
+            foreach (var archetype in archetypes)
             {
-                return Enumerable.Empty<RoomTemplate>();
+                var template = templates[random.Next(templates.Count)];
+                list.Add((template, archetype));
             }
 
-            return Enumerable.Range(0, count)
-                .Select(_ => matching[random.Next(matching.Count)])
+            return list;
+        }
+
+        private List<RoomArchetype> BuildArchetypePlan(DungeonGenerationSettings settings)
+        {
+            var archetypes = new List<RoomArchetype> { RoomArchetype.Safe };
+
+            var enemySlots = Math.Max(0, settings.EnemyRooms);
+            var treasureSlots = Math.Max(0, settings.TreasureRooms);
+            for (var i = 0; i < enemySlots; i++)
+            {
+                archetypes.Add(RoomArchetype.Enemy);
+            }
+
+            for (var i = 0; i < treasureSlots; i++)
+            {
+                archetypes.Insert(Math.Max(1, archetypes.Count - 2), RoomArchetype.Treasure);
+            }
+
+            if (settings.IncludeMiniboss)
+            {
+                archetypes.Add(RoomArchetype.MiniBoss);
+            }
+
+            archetypes.Add(RoomArchetype.Boss);
+
+            SprinkleHazards(archetypes);
+            return archetypes;
+        }
+
+        private void SprinkleHazards(List<RoomArchetype> archetypes)
+        {
+            var enemyIndexes = archetypes
+                .Select((value, index) => (value, index))
+                .Where(tuple => tuple.value == RoomArchetype.Enemy)
+                .Select(tuple => tuple.index)
                 .ToList();
+
+            if (enemyIndexes.Count == 0)
+            {
+                return;
+            }
+
+            var trapIndex = enemyIndexes[random.Next(enemyIndexes.Count)];
+            archetypes[trapIndex] = RoomArchetype.Trap;
+
+            if (enemyIndexes.Count > 1)
+            {
+                var illusionIndex = enemyIndexes[random.Next(enemyIndexes.Count)];
+                archetypes[illusionIndex] = RoomArchetype.Illusion;
+            }
         }
 
         private void PlaceKeyInPreviousRoom(
@@ -149,7 +205,8 @@ namespace Adventure.Server.Generation
             List<GeneratedInteractive> allInteractives,
             HashSet<string> placedKeys,
             int roomIndex,
-            string requiredKeyId)
+            string requiredKeyId,
+            KeyTag? keyTag)
         {
             for (var candidateIndex = roomIndex; candidateIndex >= 0; candidateIndex--)
             {
@@ -158,6 +215,7 @@ namespace Adventure.Server.Generation
                 if (keyGrantingInteractive != null)
                 {
                     keyGrantingInteractive.GrantsKeyId = requiredKeyId;
+                    keyGrantingInteractive.GrantsKeyTag = keyTag;
                     placedKeys.Add(requiredKeyId);
                     return;
                 }
@@ -169,12 +227,24 @@ namespace Adventure.Server.Generation
                 ObjectId = $"{fallbackRoom.RoomId}-autokey",
                 RoomId = fallbackRoom.RoomId,
                 Kind = "auto_key",
-                GrantsKeyId = requiredKeyId
+                GrantsKeyId = requiredKeyId,
+                GrantsKeyTag = keyTag
             };
 
             fallbackRoom.InteractiveObjects.Add(generatedInteractive);
             allInteractives.Add(generatedInteractive);
             placedKeys.Add(requiredKeyId);
+        }
+
+        private static RoomFeature ApplyArchetypeFeatures(RoomFeature baseFeatures, RoomArchetype archetype)
+        {
+            return archetype switch
+            {
+                RoomArchetype.Treasure => baseFeatures | RoomFeature.TreasureChest,
+                RoomArchetype.Illusion => baseFeatures | RoomFeature.Illusion,
+                RoomArchetype.Trap => baseFeatures | RoomFeature.Trap,
+                _ => baseFeatures
+            };
         }
     }
 }

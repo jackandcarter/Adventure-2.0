@@ -13,7 +13,7 @@ namespace Adventure.Server.Generation
         private readonly Dictionary<string, GeneratedInteractive> interactivesById;
         private readonly Dictionary<string, TriggerTemplate> triggersById;
         private readonly Dictionary<string, GeneratedEnvironmentState> environmentStates;
-        private readonly Dictionary<string, RoomTemplateType> roomTypes;
+        private readonly Dictionary<string, RoomArchetype> roomArchetypes;
         private readonly Dictionary<string, bool> roomClearState;
         private readonly Dictionary<string, HashSet<string>> playerKeyring = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> activatedTriggers = new(StringComparer.OrdinalIgnoreCase);
@@ -28,10 +28,10 @@ namespace Adventure.Server.Generation
                 .ToDictionary(t => t.TriggerId, StringComparer.OrdinalIgnoreCase);
             environmentStates = dungeon.EnvironmentStates
                 .ToDictionary(e => $"{e.RoomId}:{e.StateId}", StringComparer.OrdinalIgnoreCase);
-            roomTypes = dungeon.Rooms.ToDictionary(r => r.RoomId, r => r.Template.RoomType, StringComparer.OrdinalIgnoreCase);
+            roomArchetypes = dungeon.Rooms.ToDictionary(r => r.RoomId, r => r.Archetype, StringComparer.OrdinalIgnoreCase);
             roomClearState = dungeon.Rooms.ToDictionary(
                 r => r.RoomId,
-                r => !RequiresEnemyClear(r.Template.RoomType),
+                r => !RequiresEnemyClear(r.Archetype),
                 StringComparer.OrdinalIgnoreCase);
         }
 
@@ -44,13 +44,23 @@ namespace Adventure.Server.Generation
                 {
                     RoomId = r.RoomId,
                     TemplateId = r.Template.TemplateId,
-                    RoomType = r.Template.RoomType,
+                    Archetype = r.Archetype,
+                    Features = r.Features,
                     SequenceIndex = r.SequenceIndex
                 }).ToList(),
                 Doors = dungeon.Doors.Select(ToDoorState).ToList(),
                 Interactives = dungeon.InteractiveObjects.Select(ToInteractiveState).ToList(),
                 EnvironmentStates = dungeon.EnvironmentStates.Select(ToEnvironmentState).ToList()
             };
+        }
+
+        public List<string> ValidateStaticLayout()
+        {
+            var errors = new List<string>();
+            ValidateDoorConfigs(errors);
+            ValidateStairs(errors);
+            ValidateLockedDoorKeys(errors);
+            return errors;
         }
 
         public DungeonActionResult RegisterKeyPickup(string playerId, string interactiveId)
@@ -86,7 +96,7 @@ namespace Adventure.Server.Generation
                 return DungeonActionResult.Denied("unknown_door");
             }
 
-            if (roomClearState.TryGetValue(door.FromRoomId, out var cleared) && !cleared && RequiresEnemyClear(roomTypes[door.FromRoomId]))
+            if (roomClearState.TryGetValue(door.FromRoomId, out var cleared) && !cleared && RequiresEnemyClear(roomArchetypes[door.FromRoomId]))
             {
                 return DungeonActionResult.Denied("room_uncleared");
             }
@@ -94,6 +104,11 @@ namespace Adventure.Server.Generation
             if (door.State == DoorState.Open)
             {
                 return DungeonActionResult.Accepted(null);
+            }
+
+            if (door.State == DoorState.Sealed)
+            {
+                return DungeonActionResult.Denied("sealed_door");
             }
 
             if (!string.IsNullOrWhiteSpace(door.RequiredKeyId))
@@ -210,7 +225,7 @@ namespace Adventure.Server.Generation
 
         public DungeonActionResult MarkRoomCleared(string roomId)
         {
-            if (!roomTypes.TryGetValue(roomId, out var roomType))
+            if (!roomArchetypes.TryGetValue(roomId, out var roomType))
             {
                 return DungeonActionResult.Denied("unknown_room");
             }
@@ -256,6 +271,7 @@ namespace Adventure.Server.Generation
                 FromRoomId = door.FromRoomId,
                 ToRoomId = door.ToRoomId,
                 RequiredKeyId = door.RequiredKeyId,
+                RequiredKeyTag = door.RequiredKeyTag,
                 State = door.State
             };
         }
@@ -268,6 +284,7 @@ namespace Adventure.Server.Generation
                 RoomId = interactive.RoomId,
                 Kind = interactive.Kind,
                 GrantedKeyId = interactive.GrantsKeyId,
+                GrantedKeyTag = interactive.GrantsKeyTag,
                 Status = interactive.Status
             };
         }
@@ -282,11 +299,91 @@ namespace Adventure.Server.Generation
             };
         }
 
-        private static bool RequiresEnemyClear(RoomTemplateType roomType)
+        private void ValidateDoorConfigs(List<string> errors)
         {
-            return roomType == RoomTemplateType.Enemy
-                || roomType == RoomTemplateType.Miniboss
-                || roomType == RoomTemplateType.Boss;
+            foreach (var door in dungeon.Doors)
+            {
+                if (!dungeon.DoorConfigs.TryGetValue(door.ConfigId, out var config))
+                {
+                    errors.Add($"Door {door.DoorId} references missing config '{door.ConfigId}'.");
+                    continue;
+                }
+
+                if (door.State == DoorState.Locked && !config.SupportsLockedState)
+                {
+                    errors.Add($"Door {door.DoorId} requires lock state, but '{door.ConfigId}' does not support it.");
+                }
+
+                if (door.State == DoorState.Sealed && !config.SupportsSealedState)
+                {
+                    errors.Add($"Door {door.DoorId} is sealed, but '{door.ConfigId}' does not support sealing.");
+                }
+            }
+        }
+
+        private void ValidateStairs(List<string> errors)
+        {
+            var stairSockets = dungeon.Rooms
+                .SelectMany(room => room.Template.Stairs.Select(socket => (room, socket)))
+                .ToList();
+
+            var stairsUp = stairSockets.Where(s => s.socket.FloorOffset > 0).ToList();
+            var stairsDown = stairSockets.Where(s => s.socket.FloorOffset < 0).ToList();
+
+            foreach (var up in stairsUp)
+            {
+                var expectedFloor = up.room.SequenceIndex + up.socket.FloorOffset;
+                var matching = stairsDown.Any(down =>
+                    down.room.SequenceIndex == expectedFloor &&
+                    down.socket.TargetGridX == up.socket.TargetGridX &&
+                    down.socket.TargetGridY == up.socket.TargetGridY &&
+                    string.Equals(down.socket.Facing, up.socket.Facing, StringComparison.OrdinalIgnoreCase));
+
+                if (!matching)
+                {
+                    errors.Add($"Stair socket {up.socket.SocketId} in room {up.room.RoomId} is missing a paired descent.");
+                }
+            }
+        }
+
+        private void ValidateLockedDoorKeys(List<string> errors)
+        {
+            foreach (var door in dungeon.Doors.Where(d => d.State == DoorState.Locked && !string.IsNullOrWhiteSpace(d.RequiredKeyId)))
+            {
+                var sourceRooms = dungeon.Rooms.Where(r => r.SequenceIndex <= GetRoomSequence(door.FromRoomId)).ToList();
+                var hasSource = sourceRooms.Any(room => HasKeySource(room, door.RequiredKeyId!, door.RequiredKeyTag));
+
+                if (!hasSource)
+                {
+                    errors.Add($"Locked door {door.DoorId} does not have an upstream key source for '{door.RequiredKeyId}'.");
+                }
+            }
+        }
+
+        private static bool HasKeySource(GeneratedRoom room, string requiredKeyId, KeyTag? keyTag)
+        {
+            if (room.Template.ProvidesKeys.Any(k => string.Equals(k, requiredKeyId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            return room.InteractiveObjects.Any(interactive =>
+                string.Equals(interactive.GrantsKeyId, requiredKeyId, StringComparison.OrdinalIgnoreCase)
+                || (keyTag.HasValue && interactive.GrantsKeyTag == keyTag));
+        }
+
+        private int GetRoomSequence(string roomId)
+        {
+            var room = dungeon.Rooms.FirstOrDefault(r => r.RoomId.Equals(roomId, StringComparison.OrdinalIgnoreCase));
+            return room?.SequenceIndex ?? 0;
+        }
+
+        private static bool RequiresEnemyClear(RoomArchetype archetype)
+        {
+            return archetype == RoomArchetype.Enemy
+                || archetype == RoomArchetype.MiniBoss
+                || archetype == RoomArchetype.Boss
+                || archetype == RoomArchetype.Trap;
         }
     }
 

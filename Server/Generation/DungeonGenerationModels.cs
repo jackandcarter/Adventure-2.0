@@ -13,6 +13,8 @@ namespace Adventure.Server.Generation
         public string DungeonId { get; set; } = string.Empty;
 
         public List<RoomTemplate> Rooms { get; set; } = new();
+
+        public List<DoorConfig> DoorConfigs { get; set; } = new();
     }
 
     public class RoomTemplate
@@ -20,7 +22,7 @@ namespace Adventure.Server.Generation
         public string TemplateId { get; set; } = string.Empty;
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
-        public RoomTemplateType RoomType { get; set; }
+        public RoomFeature Features { get; set; } = RoomFeature.None;
 
         public List<SpawnPoint> SpawnPoints { get; set; } = new();
 
@@ -35,6 +37,8 @@ namespace Adventure.Server.Generation
         /// </summary>
         public List<string> ProvidesKeys { get; set; } = new();
 
+        public List<StairSocket> Stairs { get; set; } = new();
+
         public List<EnvironmentStateDefinition> EnvironmentStates { get; set; } = new();
     }
 
@@ -48,9 +52,14 @@ namespace Adventure.Server.Generation
 
         public string? RequiredKeyId { get; set; }
 
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? RequiredKeyTag { get; set; }
+
         public bool StartsLocked { get; set; }
 
         public bool IsOneWay { get; set; }
+
+        public string ConfigId { get; set; } = "default";
     }
 
     public class TriggerTemplate
@@ -72,7 +81,13 @@ namespace Adventure.Server.Generation
 
         public string? GrantsKeyId { get; set; }
 
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? GrantsKeyTag { get; set; }
+
         public string? RequiresKeyId { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? RequiresKeyTag { get; set; }
 
         public string? ActivatesTriggerId { get; set; }
     }
@@ -82,6 +97,28 @@ namespace Adventure.Server.Generation
         public string StateId { get; set; } = string.Empty;
 
         public string DefaultValue { get; set; } = string.Empty;
+    }
+
+    public class StairSocket
+    {
+        public string SocketId { get; set; } = string.Empty;
+
+        public int FloorOffset { get; set; }
+
+        public int TargetGridX { get; set; }
+
+        public int TargetGridY { get; set; }
+
+        public string Facing { get; set; } = string.Empty;
+    }
+
+    public class DoorConfig
+    {
+        public string ConfigId { get; set; } = string.Empty;
+
+        public bool SupportsLockedState { get; set; } = true;
+
+        public bool SupportsSealedState { get; set; } = true;
     }
 
     public class DungeonGenerationSettings
@@ -109,23 +146,28 @@ namespace Adventure.Server.Generation
 
         public IReadOnlyList<GeneratedEnvironmentState> EnvironmentStates => environmentStates;
 
+        public IReadOnlyDictionary<string, DoorConfig> DoorConfigs => doorConfigs;
+
         private readonly List<GeneratedRoom> rooms;
         private readonly List<GeneratedDoor> doors;
         private readonly List<GeneratedInteractive> interactives;
         private readonly List<GeneratedEnvironmentState> environmentStates;
+        private readonly Dictionary<string, DoorConfig> doorConfigs;
 
         public GeneratedDungeon(
             string dungeonId,
             List<GeneratedRoom> rooms,
             List<GeneratedDoor> doors,
             List<GeneratedInteractive> interactives,
-            List<GeneratedEnvironmentState> environmentStates)
+            List<GeneratedEnvironmentState> environmentStates,
+            IEnumerable<DoorConfig> doorConfigs)
         {
             DungeonId = dungeonId;
             this.rooms = rooms;
             this.doors = doors;
             this.interactives = interactives;
             this.environmentStates = environmentStates;
+            this.doorConfigs = doorConfigs.ToDictionary(c => c.ConfigId, StringComparer.OrdinalIgnoreCase);
         }
     }
 
@@ -137,17 +179,25 @@ namespace Adventure.Server.Generation
 
         public int SequenceIndex { get; }
 
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public RoomArchetype Archetype { get; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public RoomFeature Features { get; }
+
         public List<GeneratedDoor> Doors { get; } = new();
 
         public List<GeneratedInteractive> InteractiveObjects { get; } = new();
 
         public List<GeneratedEnvironmentState> EnvironmentStates { get; } = new();
 
-        public GeneratedRoom(string roomId, RoomTemplate template, int sequenceIndex)
+        public GeneratedRoom(string roomId, RoomTemplate template, int sequenceIndex, RoomArchetype archetype, RoomFeature features)
         {
             RoomId = roomId;
             Template = template;
             SequenceIndex = sequenceIndex;
+            Archetype = archetype;
+            Features = features;
         }
     }
 
@@ -162,7 +212,12 @@ namespace Adventure.Server.Generation
         public string? RequiredKeyId { get; set; }
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
-        public DoorState State { get; set; } = DoorState.Closed;
+        public KeyTag? RequiredKeyTag { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public DoorState State { get; set; } = DoorState.Open;
+
+        public string ConfigId { get; set; } = "default";
     }
 
     public class GeneratedInteractive
@@ -175,7 +230,13 @@ namespace Adventure.Server.Generation
 
         public string? GrantsKeyId { get; set; }
 
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? GrantsKeyTag { get; set; }
+
         public string? RequiresKeyId { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? RequiresKeyTag { get; set; }
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public InteractiveStatus Status { get; set; } = InteractiveStatus.Available;

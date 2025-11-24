@@ -42,7 +42,7 @@ namespace Adventure.EditorTools
                 EditorGUILayout.LabelField("Rooms", EditorStyles.boldLabel);
                 foreach (var room in lastLayout.Rooms)
                 {
-                    EditorGUILayout.LabelField($"{room.SequenceIndex}: {room.TemplateId} ({room.RoomType})");
+                    EditorGUILayout.LabelField($"{room.SequenceIndex}: {room.TemplateId} ({room.Archetype})");
                 }
 
                 EditorGUILayout.LabelField("Doors", EditorStyles.boldLabel);
