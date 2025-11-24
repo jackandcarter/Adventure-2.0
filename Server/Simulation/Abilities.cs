@@ -68,6 +68,23 @@ namespace Adventure.Server.Simulation
         public bool TryGet(string abilityId, out AbilityDefinition definition) => definitions.TryGetValue(abilityId, out definition!);
     }
 
+    public interface IAbilityExecutor
+    {
+        IReadOnlyCollection<AbilityExecutionResult> Results { get; }
+
+        bool Validate(AbilityCastCommand command, SimulatedActor caster, SimulatedActor? target, DateTime now, out string denial);
+
+        void StartCast(AbilityCastCommand command, SimulatedActor caster, SimulatedActor? target, DateTime now);
+
+        void UpdateCasting(TimeSpan delta, DateTime now, IEnumerable<SimulatedActor> actors);
+
+        void Resolve(AbilityDefinition definition, SimulatedActor caster, SimulatedActor? target, Vector3 targetPosition, DateTime now);
+
+        void UpdateChannels(TimeSpan delta, DateTime now, IEnumerable<SimulatedActor> actors);
+
+        void ClearResults();
+    }
+
     public class AbilityExecutionResult
     {
         public string AbilityId { get; init; } = string.Empty;
@@ -85,7 +102,7 @@ namespace Adventure.Server.Simulation
         public bool Crit { get; init; }
     }
 
-    public class AbilityExecutor
+    public class AbilityExecutor : IAbilityExecutor
     {
         private readonly AbilityCatalog catalog;
         private readonly RoomLayout layout;
