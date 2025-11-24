@@ -1,4 +1,5 @@
 using System.Text;
+using Adventure.Net;
 using Adventure.Networking;
 using UnityEngine;
 using UnityEngine.UI;
@@ -25,7 +26,20 @@ namespace Adventure.UI.Lobby
         [SerializeField]
         private Text partySummary;
 
+        [SerializeField]
+        private InputField chatInputField;
+
+        [SerializeField]
+        private Button sendChatButton;
+
+        [SerializeField]
+        private string chatChannel = "global";
+
+        [SerializeField]
+        private ClientMessagePipeline messagePipeline;
+
         private readonly StringBuilder chatBuffer = new();
+        private bool subscriptionsActive;
 
         private void Awake()
         {
@@ -34,20 +48,33 @@ namespace Adventure.UI.Lobby
                 gameStateClient = FindObjectOfType<GameStateClient>();
             }
 
-            if (gameStateClient != null)
+            if (messagePipeline == null)
             {
-                gameStateClient.ChatMessageReceived += OnChatMessage;
-                gameStateClient.PartyUpdated += OnPartyUpdated;
+                messagePipeline = FindObjectOfType<ClientMessagePipeline>();
             }
+
+            EnsureSubscriptions();
+            WireChatInput();
         }
 
         private void OnDestroy()
         {
-            if (gameStateClient != null)
+            if (subscriptionsActive && gameStateClient != null)
             {
                 gameStateClient.ChatMessageReceived -= OnChatMessage;
                 gameStateClient.PartyUpdated -= OnPartyUpdated;
+                subscriptionsActive = false;
             }
+
+            UnwireChatInput();
+        }
+
+        public void Initialize(GameStateClient stateClient, ClientMessagePipeline pipeline = null)
+        {
+            gameStateClient = stateClient ?? gameStateClient;
+            messagePipeline = pipeline ?? messagePipeline;
+            EnsureSubscriptions();
+            WireChatInput();
         }
 
         private void OnChatMessage(string sender, string message)
@@ -82,6 +109,89 @@ namespace Adventure.UI.Lobby
             if (panel != null)
             {
                 panel.SetActive(visible);
+            }
+        }
+
+        private void WireChatInput()
+        {
+            if (sendChatButton != null)
+            {
+                sendChatButton.onClick.RemoveListener(OnSendChatClicked);
+                sendChatButton.onClick.AddListener(OnSendChatClicked);
+            }
+
+            if (chatInputField != null)
+            {
+                chatInputField.onEndEdit.RemoveListener(OnChatEditEnded);
+                chatInputField.onEndEdit.AddListener(OnChatEditEnded);
+            }
+        }
+
+        private void UnwireChatInput()
+        {
+            if (sendChatButton != null)
+            {
+                sendChatButton.onClick.RemoveListener(OnSendChatClicked);
+            }
+
+            if (chatInputField != null)
+            {
+                chatInputField.onEndEdit.RemoveListener(OnChatEditEnded);
+            }
+        }
+
+        private void OnSendChatClicked()
+        {
+            SendChatFromInput();
+        }
+
+        private void OnChatEditEnded(string text)
+        {
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                SendChatFromInput();
+            }
+        }
+
+        private void SendChatFromInput()
+        {
+            var message = chatInputField != null ? chatInputField.text : string.Empty;
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            if (messagePipeline != null)
+            {
+                messagePipeline.SendChatMessage(message, chatChannel);
+            }
+
+            if (chatInputField != null)
+            {
+                chatInputField.text = string.Empty;
+            }
+        }
+
+        public void SetChatInputEnabled(bool enabled)
+        {
+            if (chatInputField != null)
+            {
+                chatInputField.interactable = enabled;
+            }
+
+            if (sendChatButton != null)
+            {
+                sendChatButton.interactable = enabled;
+            }
+        }
+
+        private void EnsureSubscriptions()
+        {
+            if (!subscriptionsActive && gameStateClient != null)
+            {
+                gameStateClient.ChatMessageReceived += OnChatMessage;
+                gameStateClient.PartyUpdated += OnPartyUpdated;
+                subscriptionsActive = true;
             }
         }
     }

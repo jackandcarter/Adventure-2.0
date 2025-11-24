@@ -21,6 +21,9 @@ namespace Adventure.Net
         private GameStateClient gameStateClient;
 
         [SerializeField]
+        private string clientVersion = "0.1.0";
+
+        [SerializeField]
         private float heartbeatIntervalSeconds = 8f;
 
         [SerializeField]
@@ -43,6 +46,11 @@ namespace Adventure.Net
         private float lastSendTime;
         private float lastReceiveTime;
         private bool reconnectQueued;
+
+        private string sessionId = string.Empty;
+
+        public event Action<AuthResponse> AuthResponseReceived;
+        public event Action<LobbySnapshot> LobbyUpdated;
 
         private void Awake()
         {
@@ -92,6 +100,44 @@ namespace Adventure.Net
             });
         }
 
+        public void SendAuthRequest(string username, string password, string versionOverride = "")
+        {
+            var version = string.IsNullOrWhiteSpace(versionOverride) ? clientVersion : versionOverride;
+            EnqueueSend(MessageTypes.AuthRequest, string.Empty, new AuthRequest
+            {
+                UserName = username,
+                Password = password,
+                ClientVersion = version
+            });
+        }
+
+        public void JoinLobby(string lobbyId)
+        {
+            if (string.IsNullOrWhiteSpace(lobbyId))
+            {
+                return;
+            }
+
+            EnqueueSend(MessageTypes.LobbyJoin, sessionId, new LobbyJoinRequest
+            {
+                LobbyId = lobbyId
+            });
+        }
+
+        public void SendChatMessage(string message, string channel = "global")
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            EnqueueSend(MessageTypes.ChatSend, sessionId, new ChatSendRequest
+            {
+                Channel = string.IsNullOrWhiteSpace(channel) ? "global" : channel,
+                Message = message
+            });
+        }
+
         public void ReceiveRaw(string rawJson)
         {
             try
@@ -118,6 +164,11 @@ namespace Adventure.Net
             for (int i = 0; i < sendBudgetPerFrame && outbound.Count > 0; i++)
             {
                 var envelope = outbound.Dequeue();
+                if (string.IsNullOrEmpty(envelope.SessionId) && !string.IsNullOrEmpty(sessionId))
+                {
+                    envelope.SessionId = sessionId;
+                }
+
                 switch (envelope)
                 {
                     case MessageEnvelope<ChatSendRequest> chatSend:
@@ -154,8 +205,14 @@ namespace Adventure.Net
                 var envelope = inbound.Dequeue();
                 switch (envelope.Type)
                 {
+                    case MessageTypes.AuthResponse:
+                        HandleAuthResponse(envelope.Payload);
+                        break;
                     case MessageTypes.ChatBroadcast:
                         HandleChatBroadcast(envelope.Payload);
+                        break;
+                    case MessageTypes.LobbyUpdate:
+                        HandleLobbyUpdate(envelope.Payload);
                         break;
                     case MessageTypes.PartyUpdate:
                         HandlePartyUpdate(envelope.Payload);
@@ -212,6 +269,7 @@ namespace Adventure.Net
 
         private void OnDisconnected(string reason)
         {
+            sessionId = string.Empty;
             reconnectQueued = true;
             ShowNotification($"Connection lost: {reason}. Attempting to reconnect...");
         }
@@ -228,6 +286,34 @@ namespace Adventure.Net
             {
                 gameStateClient.PushChatMessage(chatMessage.Sender, chatMessage.Message);
             }
+        }
+
+        private void HandleAuthResponse(object payload)
+        {
+            var authResponse = ConvertPayload<AuthResponse>(payload);
+            if (authResponse == null)
+            {
+                return;
+            }
+
+            if (authResponse.Success && !string.IsNullOrEmpty(authResponse.SessionId))
+            {
+                sessionId = authResponse.SessionId;
+            }
+
+            AuthResponseReceived?.Invoke(authResponse);
+        }
+
+        private void HandleLobbyUpdate(object payload)
+        {
+            var lobbySnapshot = ConvertPayload<LobbySnapshot>(payload);
+            if (lobbySnapshot == null)
+            {
+                return;
+            }
+
+            gameStateClient?.PushLobbyUpdate(lobbySnapshot);
+            LobbyUpdated?.Invoke(lobbySnapshot);
         }
 
         private void HandlePartyUpdate(object payload)
