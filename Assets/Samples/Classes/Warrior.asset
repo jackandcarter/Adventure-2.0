@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3bb9e17db21e48ecaf3ebebfe641710f, type: 3}
+  m_Name: Warrior
+  m_EditorClassIdentifier: 
+  id: class_warrior
+  displayName: Warrior
+  description: Durable frontline fighter with strong melee attacks.
+  icon: {fileID: 0}
+  baseStats: {fileID: 11400000, guid: 7f6f938d7d9442d5959108ec659e855b, type: 2}
+  abilities:
+  - {fileID: 11400000, guid: 6e8151ee90d94b93b9dd8cce61f15c43, type: 2}
+  - {fileID: 11400000, guid: c39ecaade6454fe28f0f20cb673a672a, type: 2}
+  tags:
+  - Melee
+  - Starter
