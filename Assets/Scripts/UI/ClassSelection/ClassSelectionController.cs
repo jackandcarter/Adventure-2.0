@@ -130,7 +130,13 @@ namespace Adventure.UI.ClassSelection
                 return;
             }
 
-            playerClassSetter?.SetClass(currentSelection);
+            if (playerClassSetter == null)
+            {
+                Debug.LogError("ClassSelectionController does not have a valid IPlayerClassSetter target to apply the selected class.");
+                return;
+            }
+
+            playerClassSetter.SetClass(currentSelection);
             onClassSelected?.Invoke(currentSelection);
         }
 
