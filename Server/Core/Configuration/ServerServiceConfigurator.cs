@@ -3,17 +3,18 @@ using Adventure.Server.Core.Repositories;
 using Adventure.Server.Core.Sessions;
 using Adventure.Server.Persistence.MariaDb;
 using Adventure.Server.Persistence;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Adventure.Server.Core.Configuration
 {
     public static class ServerServiceConfigurator
     {
-        public static ServiceRegistry CreateMariaDbBackedServices(string connectionString, string schemaDirectory)
+        public static ServiceRegistry CreateMariaDbBackedServices(string connectionString, string migrationDirectory)
         {
             var services = new ServiceRegistry();
 
             services.AddInstance(new MariaDbConnectionFactory(connectionString));
-            services.AddSingleton<IMigrationBootstrapper>(sp => new MariaDbMigrationBootstrapper(sp.Get<MariaDbConnectionFactory>(), schemaDirectory));
+            services.AddSingleton<IMigrationBootstrapper>(sp => new MariaDbMigrationBootstrapper(sp.Get<MariaDbConnectionFactory>(), migrationDirectory));
             services.AddSingleton<IAccountRepository>(sp => new MariaDbAccountRepository(sp.Get<MariaDbConnectionFactory>()));
             services.AddSingleton<ICharacterRepository>(sp => new MariaDbCharacterRepository(sp.Get<MariaDbConnectionFactory>()));
             services.AddSingleton<IInventoryRepository>(sp => new MariaDbInventoryRepository(sp.Get<MariaDbConnectionFactory>()));
@@ -32,6 +33,35 @@ namespace Adventure.Server.Core.Configuration
             services.AddSingleton(sp => new SessionManager(sp.Get<ILoginTokenRepository>(), sp.Get<ISessionRepository>()));
             services.AddSingleton(sp => new LobbyManager(sp.Get<IPlayerProfileRepository>(), sp.Get<IPartyRepository>(), sp.Get<IChatHistoryRepository>()));
             services.AddSingleton(sp => new GameSessionService(sp.Get<IGameSessionRepository>()));
+
+            return services;
+        }
+
+        public static IServiceCollection ConfigureServices(IServiceCollection services, string connectionString, string migrationDirectory)
+        {
+            services.AddSingleton(new MariaDbConnectionFactory(connectionString));
+            services.AddSingleton<IMigrationBootstrapper>(sp =>
+                new MariaDbMigrationBootstrapper(sp.GetRequiredService<MariaDbConnectionFactory>(), migrationDirectory));
+            services.AddSingleton<IReferenceDataSeeder, MariaDbReferenceDataSeeder>();
+
+            services.AddSingleton<IAccountRepository, MariaDbAccountRepository>();
+            services.AddSingleton<ICharacterRepository, MariaDbCharacterRepository>();
+            services.AddSingleton<IInventoryRepository, MariaDbInventoryRepository>();
+            services.AddSingleton<IUnlockRepository, MariaDbUnlockRepository>();
+            services.AddSingleton<Adventure.Server.Persistence.IDungeonRunRepository, MariaDbDungeonRunRepository>();
+            services.AddSingleton<ILoginTokenRepository, MariaDbLoginTokenRepository>();
+            services.AddSingleton<ISessionRepository, MariaDbSessionRepository>();
+            services.AddSingleton<IEmailVerificationRepository, MariaDbEmailVerificationRepository>();
+            services.AddSingleton<IGameSessionRepository, MariaDbGameSessionRepository>();
+
+            services.AddSingleton<IPlayerProfileRepository, AccountProfileRepository>();
+            services.AddSingleton<IDungeonRunRepository, DungeonRunRepositoryAdapter>();
+            services.AddSingleton<IPartyRepository, InMemoryPartyRepository>();
+            services.AddSingleton<IChatHistoryRepository, InMemoryChatHistoryRepository>();
+
+            services.AddSingleton<SessionManager>();
+            services.AddSingleton<LobbyManager>();
+            services.AddSingleton<GameSessionService>();
 
             return services;
         }
