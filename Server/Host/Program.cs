@@ -50,6 +50,16 @@ builder.Services.AddSingleton(new WebSocketListenerOptions());
 builder.Services.AddSingleton<WebSocketListener>();
 builder.Services.AddSingleton(_ => new SimulationLoop(serverOptions.TickRateHz));
 
+var simulationDataDirectory = ResolveDirectory(builder.Environment.ContentRootPath, Path.Combine("Server", "Simulation", "Data"));
+builder.Services.AddSingleton(provider =>
+{
+    var logger = provider.GetRequiredService<ILogger<SimulationDataLoader>>();
+    return SimulationDataLoader.LoadFromDirectory(simulationDataDirectory, logger);
+});
+builder.Services.AddSingleton(provider => provider.GetRequiredService<SimulationCatalogs>().Abilities);
+builder.Services.AddSingleton(provider => provider.GetRequiredService<SimulationCatalogs>().EnemyArchetypes);
+builder.Services.AddSingleton(provider => provider.GetRequiredService<SimulationCatalogs>().LootTables);
+
 builder.WebHost.UseUrls($"http://{serverOptions.ListenAddress}:{serverOptions.Port}");
 
 var app = builder.Build();

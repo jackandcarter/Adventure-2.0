@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Simulation Ability Definitions",
+  "type": "object",
+  "properties": {
+    "abilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "cooldownSeconds"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "displayName": { "type": "string" },
+          "range": { "type": "number" },
+          "cooldownSeconds": { "type": "number" },
+          "castTimeSeconds": { "type": "number" },
+          "channelDurationSeconds": { "type": "number" },
+          "timing": { "type": "string", "enum": ["Instant", "Cast", "Channel"] },
+          "category": { "type": "string", "enum": ["Standard", "Trance"] },
+          "requiresLineOfSight": { "type": "boolean" },
+          "cost": {
+            "type": "object",
+            "properties": {
+              "resourceType": { "type": "string", "enum": ["Mana", "Trance"] },
+              "amount": { "type": "number" }
+            }
+          },
+          "element": { "type": "string", "enum": ["Physical", "Fire", "Ice", "Lightning", "Arcane", "Holy", "Shadow"] },
+          "power": { "type": "number" },
+          "isHealing": { "type": "boolean" },
+          "minimumTrance": { "type": "number" },
+          "tranceBehavior": { "type": "string", "enum": ["None", "DoubleCast"] }
+        }
+      }
+    }
+  },
+  "required": ["abilities"]
+}

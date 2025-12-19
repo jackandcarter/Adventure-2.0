@@ -1,0 +1,16 @@
+{
+  "lootTables": [
+    {
+      "id": "starter-loot",
+      "displayName": "Starter Loot",
+      "entries": [
+        {
+          "itemId": "gold-coin",
+          "weight": 100,
+          "minQuantity": 1,
+          "maxQuantity": 3
+        }
+      ]
+    }
+  ]
+}
