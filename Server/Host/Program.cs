@@ -6,36 +6,73 @@ using Adventure.Server.Core.Configuration;
 using Adventure.Server.Core.Repositories;
 using Adventure.Server.Core.Sessions;
 using Adventure.Server.Persistence;
+using Adventure.Server.Persistence.MariaDb;
 using Adventure.Server.Network;
+using Adventure.Server.Simulation;
+using Adventure.Server.Host;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-    .AddEnvironmentVariables();
+    .AddEnvironmentVariables(prefix: "ADVENTURE_");
+
+var serverOptions = builder.Configuration.GetSection("Server").Get<ServerOptions>() ?? new ServerOptions();
+var databaseOptions = builder.Configuration.GetSection("Database").Get<DatabaseOptions>() ?? new DatabaseOptions();
+var smtpOptions = builder.Configuration.GetSection("Mail").Get<SmtpOptions>() ?? new SmtpOptions();
+
+databaseOptions.ConnectionString ??= builder.Configuration.GetConnectionString("MariaDb")
+    ?? builder.Configuration["Database:ConnectionString"];
+
+var logLevel = TryParseLogLevel(serverOptions.LogLevel);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(logLevel);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<PasswordHasher>();
-
-var connectionString = builder.Configuration.GetConnectionString("MariaDb")
-    ?? builder.Configuration["Database:ConnectionString"]
-    ?? "Server=localhost;Database=adventure;Uid=root;Pwd=pass;";
-var schemaDirectory = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "db", "schema"));
-var smtpOptions = builder.Configuration.GetSection("Mail").Get<SmtpOptions>() ?? new SmtpOptions();
-
-var serviceRegistry = ServerServiceConfigurator.CreateMariaDbBackedServices(connectionString, schemaDirectory);
-serviceRegistry.Get<IMigrationBootstrapper>().Bootstrap();
-
-builder.Services.AddSingleton(serviceRegistry);
+builder.Services.AddSingleton(serverOptions);
+builder.Services.AddSingleton(databaseOptions);
 builder.Services.AddSingleton(smtpOptions);
+builder.Services.AddSingleton(new RuntimeState());
+
+var migrationDirectory = ResolveDirectory(builder.Environment.ContentRootPath, Path.Combine("db", "migrations"));
+var connectionString = databaseOptions.BuildConnectionString();
+ServerServiceConfigurator.ConfigureServices(builder.Services, connectionString, migrationDirectory);
+
 builder.Services.AddSingleton(new SessionRegistry());
 builder.Services.AddSingleton<MessageRouter>();
 builder.Services.AddSingleton(new WebSocketConnectionRegistry());
 builder.Services.AddSingleton(new WebSocketListenerOptions());
 builder.Services.AddSingleton<WebSocketListener>();
+builder.Services.AddSingleton(_ => new SimulationLoop(serverOptions.TickRateHz));
+
+builder.WebHost.UseUrls($"http://{serverOptions.ListenAddress}:{serverOptions.Port}");
 
 var app = builder.Build();
+
+if (args.Length > 0 && args[0].Equals("migrate", StringComparison.OrdinalIgnoreCase))
+{
+    ApplyMigrationsAndSeed(app.Services);
+    return;
+}
+
+ApplyMigrationsAndSeed(app.Services);
+
+app.Lifetime.ApplicationStopping.Register(() =>
+{
+    var state = app.Services.GetRequiredService<RuntimeState>();
+    state.MarkNotReady("Shutting down");
+    app.Logger.LogInformation("Shutdown signal received. Server is stopping.");
+});
+
+if (string.IsNullOrWhiteSpace(serverOptions.AuthSecret))
+{
+    app.Logger.LogWarning("Server auth secret is not configured. Set ADVENTURE_Server__AuthSecret for production.");
+}
 
 app.UseSwagger();
 app.UseSwaggerUI();
@@ -48,11 +85,8 @@ app.Map("/ws", async (HttpContext context, WebSocketListener listener) =>
     await listener.AcceptAsync(context);
 });
 
-app.MapPost("/api/register", async (RegisterRequest request, ServiceRegistry registry, PasswordHasher hasher, SmtpOptions mailOptions) =>
+app.MapPost("/api/register", async (RegisterRequest request, IAccountRepository accountRepository, IEmailVerificationRepository verificationRepository, PasswordHasher hasher, SmtpOptions mailOptions) =>
 {
-    var accountRepository = registry.Get<IAccountRepository>();
-    var verificationRepository = registry.Get<IEmailVerificationRepository>();
-
     var existing = accountRepository.GetByEmail(request.Email);
     if (existing != null)
     {
@@ -73,11 +107,8 @@ app.MapPost("/api/register", async (RegisterRequest request, ServiceRegistry reg
     return Results.Ok(new { accountId, verificationSent = true });
 });
 
-app.MapGet("/verify", (string token, ServiceRegistry registry) =>
+app.MapGet("/verify", (string token, IEmailVerificationRepository verificationRepository, IAccountRepository accountRepository) =>
 {
-    var verificationRepository = registry.Get<IEmailVerificationRepository>();
-    var accountRepository = registry.Get<IAccountRepository>();
-
     var record = verificationRepository.GetByToken(token);
     if (record == null)
     {
@@ -99,11 +130,8 @@ app.MapGet("/verify", (string token, ServiceRegistry registry) =>
     return Results.Ok("Email verified. You may now log in.");
 });
 
-app.MapPost("/api/login", (LoginRequest request, ServiceRegistry registry, PasswordHasher hasher) =>
+app.MapPost("/api/login", (LoginRequest request, IAccountRepository accountRepository, SessionManager sessionManager, PasswordHasher hasher) =>
 {
-    var accountRepository = registry.Get<IAccountRepository>();
-    var sessionManager = registry.Get<SessionManager>();
-
     var account = accountRepository.GetByEmail(request.Email);
     if (account == null)
     {
@@ -126,12 +154,8 @@ app.MapPost("/api/login", (LoginRequest request, ServiceRegistry registry, Passw
     return Results.Ok(new AuthResult(account.AccountId, session.SessionId, session.ExpiresAt, loginToken));
 });
 
-app.MapPost("/api/sessions", (CreateGameSessionRequest request, ServiceRegistry registry) =>
+app.MapPost("/api/sessions", (CreateGameSessionRequest request, IAccountRepository accountRepository, SessionManager sessionManager, GameSessionService gameSessionService) =>
 {
-    var accountRepository = registry.Get<IAccountRepository>();
-    var sessionManager = registry.Get<SessionManager>();
-    var gameSessionService = registry.Get<GameSessionService>();
-
     if (!sessionManager.TryGetSession(request.SessionId, out var session) || session.PlayerId != request.AccountId)
     {
         return Results.Unauthorized();
@@ -147,55 +171,70 @@ app.MapPost("/api/sessions", (CreateGameSessionRequest request, ServiceRegistry 
     return Results.Ok(gameSession);
 });
 
-app.MapPost("/api/sessions/{id}/join", (string id, AuthorizedSessionRequest request, ServiceRegistry registry) =>
+app.MapPost("/api/sessions/{id}/join", (string id, AuthorizedSessionRequest request, SessionManager sessionManager, GameSessionService service) =>
 {
-    if (!AuthorizeSession(request, registry.Get<SessionManager>()))
+    if (!AuthorizeSession(request, sessionManager))
     {
         return Results.Unauthorized();
     }
 
-    var service = registry.Get<GameSessionService>();
     var result = service.JoinSession(id, request.AccountId);
     return result == null ? Results.NotFound() : Results.Ok(result);
 });
 
-app.MapPost("/api/sessions/{id}/leave", (string id, AuthorizedSessionRequest request, ServiceRegistry registry) =>
+app.MapPost("/api/sessions/{id}/leave", (string id, AuthorizedSessionRequest request, SessionManager sessionManager, GameSessionService service) =>
 {
-    if (!AuthorizeSession(request, registry.Get<SessionManager>()))
+    if (!AuthorizeSession(request, sessionManager))
     {
         return Results.Unauthorized();
     }
 
-    var service = registry.Get<GameSessionService>();
     var result = service.LeaveSession(id, request.AccountId);
     return result == null ? Results.NotFound() : Results.Ok(result);
 });
 
-app.MapPost("/api/sessions/{id}/save", (string id, SaveSessionRequest request, ServiceRegistry registry) =>
+app.MapPost("/api/sessions/{id}/save", (string id, SaveSessionRequest request, SessionManager sessionManager, GameSessionService service) =>
 {
-    if (!AuthorizeSession(request, registry.Get<SessionManager>()))
+    if (!AuthorizeSession(request, sessionManager))
     {
         return Results.Unauthorized();
     }
 
-    var service = registry.Get<GameSessionService>();
     var result = service.SaveSession(id, request.AccountId, request.SavedStateJson);
     return result == null ? Results.NotFound() : Results.Ok(result);
 });
 
-app.MapPost("/api/sessions/{id}/resume", (string id, AuthorizedSessionRequest request, ServiceRegistry registry) =>
+app.MapPost("/api/sessions/{id}/resume", (string id, AuthorizedSessionRequest request, SessionManager sessionManager, GameSessionService service) =>
 {
-    if (!AuthorizeSession(request, registry.Get<SessionManager>()))
+    if (!AuthorizeSession(request, sessionManager))
     {
         return Results.Unauthorized();
     }
 
-    var service = registry.Get<GameSessionService>();
     var result = service.ResumeSession(id, request.AccountId);
     return result == null ? Results.NotFound() : Results.Ok(result);
 });
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/health", (RuntimeState state) => Results.Ok(new { status = "ok", startedAt = state.StartedAt }));
+
+app.MapGet("/ready", (RuntimeState state, MariaDbConnectionFactory connectionFactory) =>
+{
+    if (!state.Ready)
+    {
+        return Results.Json(new { status = "starting", reason = state.NotReadyReason }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    try
+    {
+        using var connection = connectionFactory.CreateConnection();
+        connection.Open();
+        return Results.Ok(new { status = "ready" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { status = "unavailable", reason = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
 
 app.Run();
 
@@ -235,6 +274,45 @@ static async Task SendVerificationEmailAsync(SmtpOptions options, string recipie
     };
 
     await client.SendMailAsync(message);
+}
+
+static LogLevel TryParseLogLevel(string level)
+{
+    return Enum.TryParse<LogLevel>(level, true, out var parsed) ? parsed : LogLevel.Information;
+}
+
+static string ResolveDirectory(string start, string relative)
+{
+    var current = new DirectoryInfo(start);
+    while (current != null)
+    {
+        var candidate = Path.Combine(current.FullName, relative);
+        if (Directory.Exists(candidate))
+        {
+            return candidate;
+        }
+
+        current = current.Parent;
+    }
+
+    return Path.GetFullPath(Path.Combine(start, relative));
+}
+
+static void ApplyMigrationsAndSeed(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var scoped = scope.ServiceProvider;
+
+    var state = scoped.GetRequiredService<RuntimeState>();
+    state.MarkNotReady("Applying migrations");
+
+    var migrator = scoped.GetRequiredService<IMigrationBootstrapper>();
+    migrator.Bootstrap();
+
+    var seeder = scoped.GetRequiredService<IReferenceDataSeeder>();
+    seeder.SeedReferenceData();
+
+    state.MarkReady();
 }
 
 public record RegisterRequest(string Email, string DisplayName, string Password);

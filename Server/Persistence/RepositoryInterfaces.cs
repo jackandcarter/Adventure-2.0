@@ -172,4 +172,9 @@ namespace Adventure.Server.Persistence
     {
         void Bootstrap();
     }
+
+    public interface IReferenceDataSeeder
+    {
+        void SeedReferenceData();
+    }
 }
