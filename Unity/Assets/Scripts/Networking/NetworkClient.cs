@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Adventure.Shared.Network.Messages;
@@ -19,6 +18,9 @@ namespace Adventure.Networking
         [SerializeField]
         private int port = 7777;
 
+        [SerializeField]
+        private WebSocketTransport webSocketTransport;
+
         private bool connected;
 
         private readonly JsonSerializerOptions serializerOptions = new()
@@ -27,32 +29,70 @@ namespace Adventure.Networking
             PropertyNameCaseInsensitive = true
         };
 
-        private readonly Queue<string> simulatedIncoming = new();
-
         public event Action Connected;
         public event Action<string> Disconnected;
         public event Action<string> MessageReceived;
+
+        private void Awake()
+        {
+            if (webSocketTransport == null)
+            {
+                webSocketTransport = GetComponent<WebSocketTransport>();
+                if (webSocketTransport == null)
+                {
+                    webSocketTransport = gameObject.AddComponent<WebSocketTransport>();
+                }
+            }
+
+            webSocketTransport.Connected += OnTransportConnected;
+            webSocketTransport.Disconnected += OnTransportDisconnected;
+            webSocketTransport.MessageReceived += OnTransportMessageReceived;
+        }
+
+        private void OnDestroy()
+        {
+            if (webSocketTransport == null)
+            {
+                return;
+            }
+
+            webSocketTransport.Connected -= OnTransportConnected;
+            webSocketTransport.Disconnected -= OnTransportDisconnected;
+            webSocketTransport.MessageReceived -= OnTransportMessageReceived;
+        }
 
         public void Configure(string hostName, int portNumber)
         {
             host = hostName;
             port = portNumber;
+            webSocketTransport?.Configure(hostName, portNumber);
         }
 
         public async Task ConnectAsync()
         {
-            // In a full implementation this would open a socket/websocket. For now we simulate an async connect
-            // so bootstrapping code can await network readiness.
-            await Task.Delay(50);
-            connected = true;
-            Connected?.Invoke();
-            Debug.Log($"NetworkClient connected to {host}:{port}");
+            if (webSocketTransport == null)
+            {
+                await Task.Delay(50);
+                connected = true;
+                Connected?.Invoke();
+                Debug.Log($"NetworkClient connected to {host}:{port}");
+                return;
+            }
+
+            webSocketTransport.Configure(host, port);
+            await webSocketTransport.ConnectAsync();
         }
 
         public void Disconnect(string reason = "client requested")
         {
             if (!connected)
             {
+                return;
+            }
+
+            if (webSocketTransport != null)
+            {
+                webSocketTransport.Disconnect(reason);
                 return;
             }
 
@@ -77,7 +117,7 @@ namespace Adventure.Networking
 
             var serialized = JsonSerializer.Serialize(envelope, serializerOptions);
             Debug.Log($"Sending {route} -> {serialized}");
-            // Implementation placeholder for transport-level send.
+            webSocketTransport?.EnqueueSend(serialized);
         }
 
         public void SendEnvelope<TPayload>(MessageEnvelope<TPayload> envelope) where TPayload : class
@@ -90,6 +130,7 @@ namespace Adventure.Networking
 
             var serialized = JsonSerializer.Serialize(envelope, serializerOptions);
             Debug.Log($"Sending envelope {envelope.Type}: {serialized}");
+            webSocketTransport?.EnqueueSend(serialized);
         }
 
         public bool IsConnected => connected;
@@ -99,16 +140,26 @@ namespace Adventure.Networking
         /// </summary>
         public void SimulateIncoming(string rawJson)
         {
-            simulatedIncoming.Enqueue(rawJson);
+            MessageReceived?.Invoke(rawJson);
         }
 
-        private void Update()
+        private void OnTransportConnected()
         {
-            while (simulatedIncoming.Count > 0)
-            {
-                var next = simulatedIncoming.Dequeue();
-                MessageReceived?.Invoke(next);
-            }
+            connected = true;
+            Connected?.Invoke();
+            Debug.Log($"NetworkClient connected to {host}:{port}");
+        }
+
+        private void OnTransportDisconnected(string reason)
+        {
+            connected = false;
+            Disconnected?.Invoke(reason);
+            Debug.LogWarning($"NetworkClient disconnected: {reason}");
+        }
+
+        private void OnTransportMessageReceived(string rawJson)
+        {
+            MessageReceived?.Invoke(rawJson);
         }
     }
 }

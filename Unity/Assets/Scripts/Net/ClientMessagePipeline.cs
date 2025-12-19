@@ -46,6 +46,7 @@ namespace Adventure.Net
         private float lastSendTime;
         private float lastReceiveTime;
         private bool reconnectQueued;
+        private bool allowReconnect = true;
 
         private string sessionId = string.Empty;
 
@@ -226,6 +227,9 @@ namespace Adventure.Net
                     case MessageTypes.Error:
                         HandleError(envelope.Payload);
                         break;
+                    case MessageTypes.Disconnect:
+                        HandleDisconnect(envelope.Payload);
+                        break;
                 }
 
                 lastReceiveTime = Time.time;
@@ -241,7 +245,10 @@ namespace Adventure.Net
 
             if (Time.time - lastSendTime > heartbeatIntervalSeconds)
             {
-                EnqueueSend(MessageTypes.Heartbeat, string.Empty, new Heartbeat());
+                if (!string.IsNullOrEmpty(sessionId))
+                {
+                    EnqueueSend(MessageTypes.Heartbeat, string.Empty, new Heartbeat());
+                }
             }
         }
 
@@ -263,15 +270,26 @@ namespace Adventure.Net
 
         private void OnConnected()
         {
+            allowReconnect = true;
             reconnectQueued = false;
-            EnqueueSend(MessageTypes.Heartbeat, string.Empty, new Heartbeat());
+            if (!string.IsNullOrEmpty(sessionId))
+            {
+                EnqueueSend(MessageTypes.Heartbeat, string.Empty, new Heartbeat());
+            }
         }
 
         private void OnDisconnected(string reason)
         {
             sessionId = string.Empty;
-            reconnectQueued = true;
-            ShowNotification($"Connection lost: {reason}. Attempting to reconnect...");
+            reconnectQueued = allowReconnect;
+            if (allowReconnect)
+            {
+                ShowNotification($"Connection lost: {reason}. Attempting to reconnect...");
+            }
+            else
+            {
+                ShowNotification($"Disconnected: {reason}");
+            }
         }
 
         private void OnMessageReceived(string rawJson)
@@ -368,6 +386,21 @@ namespace Adventure.Net
 
             gameStateClient?.PushError(error);
             ShowNotification($"Action denied: {error.Message}");
+        }
+
+        private void HandleDisconnect(object payload)
+        {
+            var notice = ConvertPayload<DisconnectNotice>(payload) ?? new DisconnectNotice
+            {
+                Code = "unknown",
+                Message = payload?.ToString() ?? "Disconnected",
+                CanReconnect = false
+            };
+
+            allowReconnect = notice.CanReconnect;
+            gameStateClient?.PushDisconnect(notice);
+            ShowNotification($"Disconnected: {notice.Message}");
+            transport?.Disconnect(notice.Message);
         }
 
         private static PartyMember[] CreatePartyMembers(List<Adventure.Shared.Network.Messages.PartyMember> members)
