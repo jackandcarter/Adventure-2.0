@@ -1,0 +1,24 @@
+{
+  "abilities": [
+    {
+      "id": "basic-strike",
+      "displayName": "Basic Strike",
+      "range": 2.5,
+      "cooldownSeconds": 1.5,
+      "castTimeSeconds": 0.0,
+      "channelDurationSeconds": 0.0,
+      "timing": "Instant",
+      "category": "Standard",
+      "requiresLineOfSight": true,
+      "cost": {
+        "resourceType": "Mana",
+        "amount": 5
+      },
+      "element": "Physical",
+      "power": 1.0,
+      "isHealing": false,
+      "minimumTrance": 0,
+      "tranceBehavior": "None"
+    }
+  ]
+}

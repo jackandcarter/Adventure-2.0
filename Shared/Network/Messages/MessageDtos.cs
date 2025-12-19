@@ -277,6 +277,8 @@ namespace Adventure.Shared.Network.Messages
         public List<InteractiveObjectState> Interactives { get; set; } = new();
 
         public List<EnvironmentStateSnapshot> EnvironmentStates { get; set; } = new();
+
+        public List<RoomTemplateSummary> RoomTemplates { get; set; } = new();
     }
 
     public class DungeonRoomSummary
@@ -296,6 +298,85 @@ namespace Adventure.Shared.Network.Messages
         public int GridX { get; set; }
 
         public int GridY { get; set; }
+    }
+
+    public class RoomTemplateSummary
+    {
+        public string TemplateId { get; set; } = string.Empty;
+
+        public string DisplayName { get; set; } = string.Empty;
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public RoomTemplateType RoomType { get; set; }
+
+        public List<DoorTemplateSummary> Doors { get; set; } = new();
+
+        public List<TriggerTemplateSummary> Triggers { get; set; } = new();
+
+        public List<InteractiveTemplateSummary> InteractiveObjects { get; set; } = new();
+
+        public List<string> ProvidesKeys { get; set; } = new();
+
+        public List<EnvironmentStateDefinitionSnapshot> EnvironmentStates { get; set; } = new();
+
+        public bool NeverLocked { get; set; }
+
+        public bool AllowsLockedVariant { get; set; }
+
+        public bool CanSpawnSecretStaircase { get; set; }
+    }
+
+    public class DoorTemplateSummary
+    {
+        public string DoorId { get; set; } = string.Empty;
+
+        public string SocketId { get; set; } = string.Empty;
+
+        public string? RequiredKeyId { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? RequiredKeyTag { get; set; }
+
+        public bool StartsLocked { get; set; }
+
+        public bool IsOneWay { get; set; }
+    }
+
+    public class TriggerTemplateSummary
+    {
+        public string TriggerId { get; set; } = string.Empty;
+
+        public List<string> RequiredTriggers { get; set; } = new();
+
+        public string? ActivatesStateId { get; set; }
+
+        public bool ServerOnly { get; set; }
+    }
+
+    public class InteractiveTemplateSummary
+    {
+        public string ObjectId { get; set; } = string.Empty;
+
+        public string Kind { get; set; } = string.Empty;
+
+        public string? GrantsKeyId { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? GrantsKeyTag { get; set; }
+
+        public string? RequiresKeyId { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public KeyTag? RequiresKeyTag { get; set; }
+
+        public string? ActivatesTriggerId { get; set; }
+    }
+
+    public class EnvironmentStateDefinitionSnapshot
+    {
+        public string StateId { get; set; } = string.Empty;
+
+        public string DefaultValue { get; set; } = string.Empty;
     }
 
     public class DungeonDoorState

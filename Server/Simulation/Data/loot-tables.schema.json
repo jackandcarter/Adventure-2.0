@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Simulation Loot Tables",
+  "type": "object",
+  "properties": {
+    "lootTables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "entries"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "displayName": { "type": "string" },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "itemId",
+                "weight",
+                "minQuantity",
+                "maxQuantity"
+              ],
+              "properties": {
+                "itemId": { "type": "string" },
+                "weight": { "type": "integer" },
+                "minQuantity": { "type": "integer" },
+                "maxQuantity": { "type": "integer" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": ["lootTables"]
+}

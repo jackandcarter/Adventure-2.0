@@ -15,7 +15,7 @@ namespace Adventure.Server.Generation
         private readonly Dictionary<string, GeneratedEnvironmentState> environmentStates;
         private readonly Dictionary<string, RoomArchetype> roomArchetypes;
         private readonly Dictionary<string, bool> roomClearState;
-        private readonly Dictionary<string, HashSet<string>> playerKeyring = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Dictionary<string, KeyTag?>> playerKeyring = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> activatedTriggers = new(StringComparer.OrdinalIgnoreCase);
 
         public DungeonStateValidator(GeneratedDungeon dungeon)
@@ -37,6 +37,15 @@ namespace Adventure.Server.Generation
 
         public DungeonLayoutSummary CreateLayoutSummary()
         {
+            var templateLookup = new Dictionary<string, RoomTemplateSummary>(StringComparer.OrdinalIgnoreCase);
+            foreach (var room in dungeon.Rooms)
+            {
+                if (!templateLookup.ContainsKey(room.Template.TemplateId))
+                {
+                    templateLookup[room.Template.TemplateId] = ToRoomTemplateSummary(room.Template);
+                }
+            }
+
             return new DungeonLayoutSummary
             {
                 DungeonId = dungeon.DungeonId,
@@ -50,7 +59,8 @@ namespace Adventure.Server.Generation
                 }).ToList(),
                 Doors = dungeon.Doors.Select(ToDoorState).ToList(),
                 Interactives = dungeon.InteractiveObjects.Select(ToInteractiveState).ToList(),
-                EnvironmentStates = dungeon.EnvironmentStates.Select(ToEnvironmentState).ToList()
+                EnvironmentStates = dungeon.EnvironmentStates.Select(ToEnvironmentState).ToList(),
+                RoomTemplates = templateLookup.Values.ToList()
             };
         }
 
@@ -80,7 +90,7 @@ namespace Adventure.Server.Generation
                 return DungeonActionResult.Denied("no_key_available");
             }
 
-            AddKeyToPlayer(playerId, interactive.GrantsKeyId);
+            AddKeyToPlayer(playerId, interactive.GrantsKeyId, interactive.GrantsKeyTag);
             interactive.Status = InteractiveStatus.Consumed;
 
             return DungeonActionResult.Accepted(new DungeonStateDelta
@@ -111,19 +121,18 @@ namespace Adventure.Server.Generation
                 return DungeonActionResult.Denied("sealed_door");
             }
 
-            if (!string.IsNullOrWhiteSpace(door.RequiredKeyId))
+            if (!string.IsNullOrWhiteSpace(door.RequiredKeyId) || door.RequiredKeyTag.HasValue)
             {
-                if (string.IsNullOrWhiteSpace(providedKeyId) || !string.Equals(door.RequiredKeyId, providedKeyId, StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(door.RequiredKeyId)
+                    && (string.IsNullOrWhiteSpace(providedKeyId) || !string.Equals(door.RequiredKeyId, providedKeyId, StringComparison.OrdinalIgnoreCase)))
                 {
                     return DungeonActionResult.Denied("key_required");
                 }
 
-                if (!PlayerHasKey(playerId, providedKeyId))
+                if (!TryConsumeKey(playerId, providedKeyId, door.RequiredKeyTag, out var denial))
                 {
-                    return DungeonActionResult.Denied("missing_key");
+                    return DungeonActionResult.Denied(denial);
                 }
-
-                RemoveKeyFromPlayer(playerId, providedKeyId);
             }
 
             door.State = DoorState.Open;
@@ -180,19 +189,19 @@ namespace Adventure.Server.Generation
                 return DungeonActionResult.Denied("already_consumed");
             }
 
-            if (!string.IsNullOrWhiteSpace(interactive.RequiresKeyId))
+            if (!string.IsNullOrWhiteSpace(interactive.RequiresKeyId) || interactive.RequiresKeyTag.HasValue)
             {
-                if (string.IsNullOrWhiteSpace(providedKeyId) || !string.Equals(interactive.RequiresKeyId, providedKeyId, StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(interactive.RequiresKeyId)
+                    && (string.IsNullOrWhiteSpace(providedKeyId)
+                        || !string.Equals(interactive.RequiresKeyId, providedKeyId, StringComparison.OrdinalIgnoreCase)))
                 {
                     return DungeonActionResult.Denied("key_required");
                 }
 
-                if (!PlayerHasKey(playerId, providedKeyId))
+                if (!TryConsumeKey(playerId, providedKeyId, interactive.RequiresKeyTag, out var denial))
                 {
-                    return DungeonActionResult.Denied("missing_key");
+                    return DungeonActionResult.Denied(denial);
                 }
-
-                RemoveKeyFromPlayer(playerId, providedKeyId);
             }
 
             interactive.Status = InteractiveStatus.Consumed;
@@ -203,7 +212,7 @@ namespace Adventure.Server.Generation
 
             if (!string.IsNullOrWhiteSpace(interactive.GrantsKeyId))
             {
-                AddKeyToPlayer(playerId, interactive.GrantsKeyId);
+                AddKeyToPlayer(playerId, interactive.GrantsKeyId, interactive.GrantsKeyTag);
             }
 
             if (!string.IsNullOrWhiteSpace(interactive.ActivatesTriggerId))
@@ -239,27 +248,54 @@ namespace Adventure.Server.Generation
             return DungeonActionResult.Accepted(null);
         }
 
-        private bool PlayerHasKey(string playerId, string keyId)
+        private bool TryConsumeKey(string playerId, string? keyId, KeyTag? requiredTag, out string denial)
         {
-            return playerKeyring.TryGetValue(playerId, out var keys) && keys.Contains(keyId);
+            denial = "missing_key";
+            if (!playerKeyring.TryGetValue(playerId, out var keys) || keys.Count == 0)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(keyId))
+            {
+                if (!keys.TryGetValue(keyId, out var keyTag))
+                {
+                    return false;
+                }
+
+                if (requiredTag.HasValue && keyTag != requiredTag)
+                {
+                    denial = "key_required";
+                    return false;
+                }
+
+                keys.Remove(keyId);
+                return true;
+            }
+
+            if (requiredTag.HasValue)
+            {
+                var match = keys.FirstOrDefault(pair => pair.Value == requiredTag);
+                if (!string.IsNullOrWhiteSpace(match.Key))
+                {
+                    keys.Remove(match.Key);
+                    return true;
+                }
+            }
+
+            return false;
         }
 
-        private void AddKeyToPlayer(string playerId, string keyId)
+        private void AddKeyToPlayer(string playerId, string keyId, KeyTag? keyTag)
         {
             if (!playerKeyring.TryGetValue(playerId, out var keys))
             {
-                keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                keys = new Dictionary<string, KeyTag?>(StringComparer.OrdinalIgnoreCase);
                 playerKeyring[playerId] = keys;
             }
 
-            keys.Add(keyId);
+            keys[keyId] = keyTag;
         }
-
-        private void RemoveKeyFromPlayer(string playerId, string keyId)
-        {
-            if (playerKeyring.TryGetValue(playerId, out var keys))
-            {
-                keys.Remove(keyId);
             }
         }
 
@@ -286,6 +322,48 @@ namespace Adventure.Server.Generation
                 GrantedKeyId = interactive.GrantsKeyId,
                 GrantedKeyTag = interactive.GrantsKeyTag,
                 Status = interactive.Status
+            };
+        }
+
+        private static RoomTemplateSummary ToRoomTemplateSummary(RoomTemplate template)
+        {
+            return new RoomTemplateSummary
+            {
+                TemplateId = template.TemplateId,
+                DisplayName = template.TemplateId,
+                RoomType = RoomTemplateType.Enemy,
+                Doors = template.Doors.Select(door => new DoorTemplateSummary
+                {
+                    DoorId = door.DoorId,
+                    SocketId = door.SocketId,
+                    RequiredKeyId = door.RequiredKeyId,
+                    RequiredKeyTag = door.RequiredKeyTag,
+                    StartsLocked = door.StartsLocked,
+                    IsOneWay = door.IsOneWay
+                }).ToList(),
+                Triggers = template.Triggers.Select(trigger => new TriggerTemplateSummary
+                {
+                    TriggerId = trigger.TriggerId,
+                    RequiredTriggers = trigger.RequiredTriggers.ToList(),
+                    ActivatesStateId = trigger.ActivatesStateId,
+                    ServerOnly = trigger.ServerOnly
+                }).ToList(),
+                InteractiveObjects = template.InteractiveObjects.Select(interactive => new InteractiveTemplateSummary
+                {
+                    ObjectId = interactive.ObjectId,
+                    Kind = interactive.Kind,
+                    GrantsKeyId = interactive.GrantsKeyId,
+                    GrantsKeyTag = interactive.GrantsKeyTag,
+                    RequiresKeyId = interactive.RequiresKeyId,
+                    RequiresKeyTag = interactive.RequiresKeyTag,
+                    ActivatesTriggerId = interactive.ActivatesTriggerId
+                }).ToList(),
+                ProvidesKeys = template.ProvidesKeys.ToList(),
+                EnvironmentStates = template.EnvironmentStates.Select(state => new EnvironmentStateDefinitionSnapshot
+                {
+                    StateId = state.StateId,
+                    DefaultValue = state.DefaultValue
+                }).ToList()
             };
         }
 

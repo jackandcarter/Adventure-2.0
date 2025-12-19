@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Simulation Enemy Archetypes",
+  "type": "object",
+  "properties": {
+    "enemyArchetypes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "stats"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "displayName": { "type": "string" },
+          "stats": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "number" },
+              "maxHealth": { "type": "number" },
+              "maxMana": { "type": "number" },
+              "attackPower": { "type": "number" },
+              "magicPower": { "type": "number" },
+              "speed": { "type": "number" },
+              "defense": { "type": "number" },
+              "magicResist": { "type": "number" },
+              "tenacity": { "type": "number" },
+              "precision": { "type": "number" },
+              "awareness": { "type": "number" },
+              "critRating": { "type": "number" },
+              "evadeRating": { "type": "number" },
+              "tranceGenerationBonus": { "type": "number" },
+              "tranceSpendEfficiency": { "type": "number" }
+            }
+          },
+          "abilityIds": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "lootTableId": { "type": "string" }
+        }
+      }
+    }
+  },
+  "required": ["enemyArchetypes"]
+}

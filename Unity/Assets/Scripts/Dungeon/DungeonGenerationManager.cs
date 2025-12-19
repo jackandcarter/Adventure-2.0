@@ -47,9 +47,10 @@ namespace Adventure.Dungeon
             {
                 DungeonId = Guid.NewGuid().ToString()
             };
+            var templateLookup = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             Vector2Int cursor = new(gridWidth / 2, gridHeight / 2);
-            PlaceRoom(cursor, ChooseTemplate(RoomTemplateType.Safe, random), layout, occupied, false, random);
+            PlaceRoom(cursor, ChooseTemplate(RoomTemplateType.Safe, random), layout, occupied, false, random, templateLookup);
 
             // Build the main path ending in a boss room
             for (int i = 1; i < mainPathLength; i++)
@@ -63,7 +64,7 @@ namespace Adventure.Dungeon
                 bool isFinalStep = i == mainPathLength - 1;
                 var targetType = isFinalStep ? RoomTemplateType.Boss : RoomTemplateType.Enemy;
                 var template = ChooseTemplate(targetType, random);
-                PlaceRoom(cursor, template, layout, occupied, ShouldLock(template), random, isFinalStep);
+                PlaceRoom(cursor, template, layout, occupied, ShouldLock(template), random, templateLookup, isFinalStep);
 
                 if (!isFinalStep && random.NextDouble() < branchChance)
                 {
@@ -95,7 +96,7 @@ namespace Adventure.Dungeon
 
             var branchType = random.NextDouble() > 0.5 ? RoomTemplateType.Treasure : RoomTemplateType.Illusion;
             var template = ChooseTemplate(branchType, random);
-            PlaceRoom(target, template, layout, occupied, ShouldLock(template), random);
+            PlaceRoom(target, template, layout, occupied, ShouldLock(template), random, templateLookup);
         }
 
         private void TryPlaceSecretStaircase(DungeonLayoutSummary layout, Dictionary<Vector2Int, PlacedRoom> occupied, System.Random random)
@@ -120,7 +121,7 @@ namespace Adventure.Dungeon
                 }
 
                 var staircaseTemplate = ChooseTemplate(RoomTemplateType.StaircaseDown, random);
-                PlaceRoom(candidate, staircaseTemplate, layout, occupied, true, random, false, true);
+                PlaceRoom(candidate, staircaseTemplate, layout, occupied, true, random, templateLookup, false, true);
                 return;
             }
         }
@@ -166,7 +167,7 @@ namespace Adventure.Dungeon
               }
           }
 
-        private void PlaceRoom(Vector2Int gridPos, RoomTemplateDefinition template, DungeonLayoutSummary layout, Dictionary<Vector2Int, PlacedRoom> occupied, bool locked, System.Random random, bool isBoss = false, bool isBasement = false)
+        private void PlaceRoom(Vector2Int gridPos, RoomTemplateDefinition template, DungeonLayoutSummary layout, Dictionary<Vector2Int, PlacedRoom> occupied, bool locked, System.Random random, HashSet<string> templateLookup, bool isBoss = false, bool isBasement = false)
         {
             var roomId = Guid.NewGuid().ToString();
             occupied[gridPos] = new PlacedRoom
@@ -192,6 +193,7 @@ namespace Adventure.Dungeon
             // Include environment defaults so server can validate
             if (template.ToExportModel() is RoomTemplatePayload payload)
             {
+                RegisterTemplate(layout, payload, templateLookup);
                 foreach (var env in payload.EnvironmentStates)
                 {
                     layout.EnvironmentStates.Add(new EnvironmentStateSnapshot
@@ -227,6 +229,55 @@ namespace Adventure.Dungeon
                     Status = InteractiveStatus.Available
                 });
             }
+        }
+
+        private static void RegisterTemplate(DungeonLayoutSummary layout, RoomTemplatePayload payload, HashSet<string> templateLookup)
+        {
+            if (!templateLookup.Add(payload.TemplateId))
+            {
+                return;
+            }
+
+            var summary = new RoomTemplateSummary
+            {
+                TemplateId = payload.TemplateId,
+                DisplayName = payload.DisplayName,
+                RoomType = payload.RoomType,
+                Doors = payload.Doors.ConvertAll(door => new DoorTemplateSummary
+                {
+                    DoorId = door.DoorId,
+                    SocketId = door.SocketId,
+                    RequiredKeyId = string.IsNullOrWhiteSpace(door.RequiredKeyId) ? null : door.RequiredKeyId,
+                    StartsLocked = door.StartsLocked,
+                    IsOneWay = door.IsOneWay
+                }),
+                Triggers = payload.Triggers.ConvertAll(trigger => new TriggerTemplateSummary
+                {
+                    TriggerId = trigger.TriggerId,
+                    RequiredTriggers = new List<string>(trigger.RequiredTriggers),
+                    ActivatesStateId = string.IsNullOrWhiteSpace(trigger.ActivatesStateId) ? null : trigger.ActivatesStateId,
+                    ServerOnly = trigger.ServerOnly
+                }),
+                InteractiveObjects = payload.InteractiveObjects.ConvertAll(interactive => new InteractiveTemplateSummary
+                {
+                    ObjectId = interactive.ObjectId,
+                    Kind = interactive.Kind,
+                    GrantsKeyId = string.IsNullOrWhiteSpace(interactive.GrantsKeyId) ? null : interactive.GrantsKeyId,
+                    RequiresKeyId = string.IsNullOrWhiteSpace(interactive.RequiresKeyId) ? null : interactive.RequiresKeyId,
+                    ActivatesTriggerId = string.IsNullOrWhiteSpace(interactive.ActivatesTriggerId) ? null : interactive.ActivatesTriggerId
+                }),
+                ProvidesKeys = new List<string>(payload.ProvidesKeys),
+                EnvironmentStates = payload.EnvironmentStates.ConvertAll(state => new EnvironmentStateDefinitionSnapshot
+                {
+                    StateId = state.StateId,
+                    DefaultValue = state.DefaultValue
+                }),
+                NeverLocked = payload.NeverLocked,
+                AllowsLockedVariant = payload.AllowsLockedVariant,
+                CanSpawnSecretStaircase = payload.CanSpawnSecretStaircase
+            };
+
+            layout.RoomTemplates.Add(summary);
         }
 
         private bool ShouldLock(RoomTemplateDefinition template)
