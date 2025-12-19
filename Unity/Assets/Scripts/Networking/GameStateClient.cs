@@ -17,6 +17,7 @@ namespace Adventure.Networking
         public event Action<CombatEvent> CombatEventReceived;
         public event Action<DungeonState> DungeonStateUpdated;
         public event Action<ErrorResponse> ErrorReceived;
+        public event Action<DisconnectNotice> DisconnectReceived;
         public event Action<LobbySnapshot> LobbyUpdated;
 
         public void PushChatMessage(string sender, string message)
@@ -57,6 +58,11 @@ namespace Adventure.Networking
         public void PushError(ErrorResponse error)
         {
             ErrorReceived?.Invoke(error);
+        }
+
+        public void PushDisconnect(DisconnectNotice notice)
+        {
+            DisconnectReceived?.Invoke(notice);
         }
 
         public void PushLobbyUpdate(LobbySnapshot lobbySnapshot)

@@ -6,6 +6,7 @@ using Adventure.Server.Core.Configuration;
 using Adventure.Server.Core.Repositories;
 using Adventure.Server.Core.Sessions;
 using Adventure.Server.Persistence;
+using Adventure.Server.Network;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +29,11 @@ serviceRegistry.Get<IMigrationBootstrapper>().Bootstrap();
 
 builder.Services.AddSingleton(serviceRegistry);
 builder.Services.AddSingleton(smtpOptions);
+builder.Services.AddSingleton(new SessionRegistry());
+builder.Services.AddSingleton<MessageRouter>();
+builder.Services.AddSingleton(new WebSocketConnectionRegistry());
+builder.Services.AddSingleton(new WebSocketListenerOptions());
+builder.Services.AddSingleton<WebSocketListener>();
 
 var app = builder.Build();
 
@@ -35,6 +41,12 @@ app.UseSwagger();
 app.UseSwaggerUI();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseWebSockets();
+
+app.Map("/ws", async (HttpContext context, WebSocketListener listener) =>
+{
+    await listener.AcceptAsync(context);
+});
 
 app.MapPost("/api/register", async (RegisterRequest request, ServiceRegistry registry, PasswordHasher hasher, SmtpOptions mailOptions) =>
 {

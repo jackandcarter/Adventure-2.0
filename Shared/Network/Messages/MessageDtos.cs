@@ -45,6 +45,19 @@ namespace Adventure.Shared.Network.Messages
         public const string DungeonStateDelta = "dungeon/update";
         public const string Heartbeat = "system/heartbeat";
         public const string Error = "system/error";
+        public const string Disconnect = "system/disconnect";
+    }
+
+    public static class SystemMessageCodes
+    {
+        public const string AuthExpired = "auth_expired";
+        public const string AuthRequired = "auth_required";
+        public const string VersionMismatch = "version_mismatch";
+        public const string ServerShutdown = "server_shutdown";
+        public const string HeartbeatTimeout = "heartbeat_timeout";
+        public const string BadFormat = "bad_format";
+        public const string InvalidSession = "invalid_session";
+        public const string UnknownType = "unknown_type";
     }
 
     // Auth
@@ -350,5 +363,14 @@ namespace Adventure.Shared.Network.Messages
         public string Message { get; set; } = string.Empty;
 
         public int RetryAfterSeconds { get; set; }
+    }
+
+    public class DisconnectNotice
+    {
+        public string Code { get; set; } = string.Empty;
+
+        public string Message { get; set; } = string.Empty;
+
+        public bool CanReconnect { get; set; }
     }
 }

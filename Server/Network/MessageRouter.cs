@@ -25,6 +25,11 @@ namespace Adventure.Server.Network
         {
             return activeSessions.TryGetValue(sessionId, out playerId!);
         }
+
+        public void Remove(string sessionId)
+        {
+            activeSessions.TryRemove(sessionId, out _);
+        }
     }
 
     public class MessageContext
@@ -94,7 +99,7 @@ namespace Adventure.Server.Network
                 await sender.SendAsync(new MessageEnvelope<ErrorResponse>
                 {
                     Type = MessageTypes.Error,
-                    Payload = new ErrorResponse { Code = "bad_format", Message = "Unrecognized message envelope." }
+                    Payload = new ErrorResponse { Code = SystemMessageCodes.BadFormat, Message = "Unrecognized message envelope." }
                 });
                 return;
             }
@@ -109,7 +114,7 @@ namespace Adventure.Server.Network
                 await sender.SendAsync(new MessageEnvelope<ErrorResponse>
                 {
                     Type = MessageTypes.Error,
-                    Payload = new ErrorResponse { Code = "invalid_session", Message = "Session expired or unknown.", RetryAfterSeconds = 1 }
+                    Payload = new ErrorResponse { Code = SystemMessageCodes.InvalidSession, Message = "Session expired or unknown.", RetryAfterSeconds = 1 }
                 });
                 return;
             }
@@ -128,7 +133,7 @@ namespace Adventure.Server.Network
                 await sender.SendAsync(new MessageEnvelope<ErrorResponse>
                 {
                     Type = MessageTypes.Error,
-                    Payload = new ErrorResponse { Code = "unknown_type", Message = $"No handler for {envelope.Type}" }
+                    Payload = new ErrorResponse { Code = SystemMessageCodes.UnknownType, Message = $"No handler for {envelope.Type}" }
                 });
             }
         }

@@ -41,6 +41,7 @@ namespace Adventure.UI.Notification
             }
 
             gameStateClient.ErrorReceived += OnError;
+            gameStateClient.DisconnectReceived += OnDisconnect;
         }
 
         public void Show(string message)
@@ -66,6 +67,11 @@ namespace Adventure.UI.Notification
         private void OnError(ErrorResponse error)
         {
             Show($"{error.Code.ToUpperInvariant()}: {error.Message}");
+        }
+
+        private void OnDisconnect(DisconnectNotice notice)
+        {
+            Show($"{notice.Code.ToUpperInvariant()}: {notice.Message}");
         }
 
         private void Trim()
