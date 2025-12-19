@@ -82,6 +82,13 @@ namespace Adventure.Server.Core.Dungeons
             return instances.TryGetValue(instanceId, out instance!);
         }
 
+        public bool TryGetInstanceForPlayer(string playerId, out DungeonInstance instance)
+        {
+            instance = instances.Values.FirstOrDefault(candidate =>
+                candidate.Members.Any(member => member.PlayerId == playerId))!;
+            return instance != null;
+        }
+
         public bool RouteEvent(string instanceId, string playerId, object evt)
         {
             if (!instances.TryGetValue(instanceId, out var instance))

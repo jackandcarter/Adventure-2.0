@@ -13,6 +13,7 @@ namespace Adventure.Server.Simulation
         private readonly TimeSpan tickInterval;
         private CancellationTokenSource? loopCts;
         private Task? loopTask;
+        public event Action<SimulationRoom, TimeSpan, DateTime>? RoomTicked;
 
         public SimulationLoop(int tickRateHz = 20)
         {
@@ -86,6 +87,7 @@ namespace Adventure.Server.Simulation
             foreach (var room in rooms.Values)
             {
                 room.Tick(delta, now);
+                RoomTicked?.Invoke(room, delta, now);
             }
         }
     }

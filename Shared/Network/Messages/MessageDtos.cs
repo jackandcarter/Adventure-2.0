@@ -38,7 +38,9 @@ namespace Adventure.Shared.Network.Messages
         public const string ChatBroadcast = "chat/broadcast";
         public const string PartyUpdate = "party/update";
         public const string Movement = "movement/input";
+        public const string MovementState = "movement/state";
         public const string AbilityCast = "ability/cast";
+        public const string AbilityCastResult = "ability/result";
         public const string CombatEvent = "combat/event";
         public const string DungeonState = "dungeon/state";
         public const string DungeonLayout = "dungeon/layout";

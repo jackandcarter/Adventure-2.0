@@ -36,14 +36,24 @@ namespace Adventure.Server.Core.Repositories
             this.persistence = persistence;
         }
 
-        public void RecordEnd(string instanceId)
+        public void AppendEvent(RunEventRecord logEvent)
         {
-            persistence.CompleteRun(instanceId, "completed", DateTime.UtcNow);
+            persistence.AppendEvent(logEvent);
         }
 
-        public void RecordStart(string instanceId, string dungeonId, string partyId)
+        public IReadOnlyCollection<RunEventRecord> GetEvents(string runId)
         {
-            persistence.BeginRun(dungeonId, partyId, DateTime.UtcNow);
+            return persistence.GetEvents(runId);
+        }
+
+        public void RecordEnd(string runId)
+        {
+            persistence.CompleteRun(runId, "completed", DateTime.UtcNow);
+        }
+
+        public DungeonRunRecord RecordStart(string instanceId, string dungeonId, string partyId)
+        {
+            return persistence.BeginRun(dungeonId, partyId, DateTime.UtcNow);
         }
     }
 
@@ -97,6 +107,55 @@ namespace Adventure.Server.Core.Repositories
         {
             return sessions.Values.ToArray();
         }
+    }
+
+    public class InMemoryDungeonRunRepository : IDungeonRunRepository
+    {
+        private readonly ConcurrentDictionary<string, DungeonRunRecord> runs = new();
+        private readonly ConcurrentDictionary<string, List<RunEventRecord>> events = new();
+        private long nextEventId;
+
+        public DungeonRunRecord RecordStart(string instanceId, string dungeonId, string partyId)
+        {
+            var runId = string.IsNullOrWhiteSpace(instanceId) ? Guid.NewGuid().ToString("N") : instanceId;
+            var record = new DungeonRunRecord(runId, dungeonId, partyId, "in_progress", DateTime.UtcNow, null);
+            runs[runId] = record;
+            return record;
+        }
+
+        public void RecordEnd(string runId)
+        {
+            if (runs.TryGetValue(runId, out var record))
+            {
+                runs[runId] = record with { Status = "completed", EndedAt = DateTime.UtcNow };
+            }
+        }
+
+        public void AppendEvent(RunEventRecord logEvent)
+        {
+            var eventId = System.Threading.Interlocked.Increment(ref nextEventId);
+            var entry = logEvent with { EventId = eventId };
+            var list = events.GetOrAdd(entry.RunId, _ => new List<RunEventRecord>());
+            lock (list)
+            {
+                list.Add(entry);
+            }
+        }
+
+        public IReadOnlyCollection<RunEventRecord> GetEvents(string runId)
+        {
+            if (!events.TryGetValue(runId, out var list))
+            {
+                return Array.Empty<RunEventRecord>();
+            }
+
+            lock (list)
+            {
+                return list.ToArray();
+            }
+        }
+
+        public IReadOnlyCollection<DungeonRunRecord> Runs => runs.Values.ToArray();
     }
 
     public class InMemoryPartyRepository : IPartyRepository

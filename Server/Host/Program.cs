@@ -49,6 +49,8 @@ builder.Services.AddSingleton(new WebSocketConnectionRegistry());
 builder.Services.AddSingleton(new WebSocketListenerOptions());
 builder.Services.AddSingleton<WebSocketListener>();
 builder.Services.AddSingleton(_ => new SimulationLoop(serverOptions.TickRateHz));
+builder.Services.AddSingleton<DungeonMessageHandlers>();
+builder.Services.AddHostedService<SimulationLoopHostedService>();
 
 var simulationDataDirectory = ResolveDirectory(builder.Environment.ContentRootPath, Path.Combine("Server", "Simulation", "Data"));
 builder.Services.AddSingleton(provider =>
@@ -94,6 +96,10 @@ app.Map("/ws", async (HttpContext context, WebSocketListener listener) =>
 {
     await listener.AcceptAsync(context);
 });
+
+var router = app.Services.GetRequiredService<MessageRouter>();
+var dungeonHandlers = app.Services.GetRequiredService<DungeonMessageHandlers>();
+dungeonHandlers.Register(router);
 
 app.MapPost("/api/register", async (RegisterRequest request, IAccountRepository accountRepository, IEmailVerificationRepository verificationRepository, PasswordHasher hasher, SmtpOptions mailOptions) =>
 {

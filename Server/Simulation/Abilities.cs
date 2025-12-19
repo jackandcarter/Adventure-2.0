@@ -124,14 +124,16 @@ namespace Adventure.Server.Simulation
     {
         private readonly AbilityCatalog catalog;
         private readonly RoomLayout layout;
+        private readonly Random random;
         private readonly List<AbilityExecutionResult> bufferedResults = new();
 
         public IReadOnlyCollection<AbilityExecutionResult> Results => bufferedResults;
 
-        public AbilityExecutor(AbilityCatalog catalog, RoomLayout layout)
+        public AbilityExecutor(AbilityCatalog catalog, RoomLayout layout, Random? random = null)
         {
             this.catalog = catalog;
             this.layout = layout;
+            this.random = random ?? Random.Shared;
         }
 
         public bool Validate(AbilityCastCommand command, SimulatedActor caster, SimulatedActor? target, DateTime now, out string denial)
@@ -306,9 +308,9 @@ namespace Adventure.Server.Simulation
             return (int)MathF.Round(mitigated);
         }
 
-        private static bool RollCrit(DerivedStats derived)
+        private bool RollCrit(DerivedStats derived)
         {
-            return Random.Shared.NextDouble() <= derived.CriticalChance;
+            return random.NextDouble() <= derived.CriticalChance;
         }
 
         public void ClearResults()
