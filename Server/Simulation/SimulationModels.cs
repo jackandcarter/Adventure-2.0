@@ -159,6 +159,7 @@ namespace Adventure.Server.Simulation
     {
         private readonly IAbilityExecutor abilityExecutor;
         private readonly TimeSpan movementReconciliationGrace = TimeSpan.FromMilliseconds(200);
+        private readonly ConcurrentQueue<SimulationOutput> outputQueue = new();
 
         public string RoomId { get; }
 
@@ -168,18 +169,11 @@ namespace Adventure.Server.Simulation
 
         private readonly Dictionary<string, SimulatedActor> actors = new();
 
-        public SimulationRoom(string roomId, RoomLayout layout, AbilityCatalog catalog)
+        public SimulationRoom(string roomId, RoomLayout layout, AbilityCatalog catalog, Random? random = null)
         {
             RoomId = roomId;
             Layout = layout;
-            abilityExecutor = new AbilityExecutor(catalog, layout);
-        }
-
-        public IReadOnlyCollection<AbilityExecutionResult> ConsumeAbilityResults()
-        {
-            var results = abilityExecutor.Results.ToList();
-            abilityExecutor.ClearResults();
-            return results;
+            abilityExecutor = new AbilityExecutor(catalog, layout, random);
         }
 
         public SimulatedActor Spawn(string actorId, Vector3 position, StatSnapshot stats)
@@ -205,6 +199,7 @@ namespace Adventure.Server.Simulation
 
             abilityExecutor.UpdateCasting(delta, now, actors.Values);
             abilityExecutor.UpdateChannels(delta, now, actors.Values);
+            EmitCombatEvents();
         }
 
         private void ProcessCommands(SimulatedActor actor, TimeSpan delta, DateTime now)
@@ -217,7 +212,10 @@ namespace Adventure.Server.Simulation
                         ReconcileMovement(actor, movement, delta);
                         break;
                     case AbilityCastCommand abilityCast:
-                        HandleAbilityCommand(actor, abilityCast, now);
+                        HandleAbilityCommand(actor, abilityCast, now, null, null);
+                        break;
+                    case AbilityCastInput abilityCastInput:
+                        HandleAbilityCommand(actor, abilityCastInput.Command, now, abilityCastInput.SessionId, abilityCastInput.RequestId);
                         break;
                 }
             }
@@ -243,32 +241,97 @@ namespace Adventure.Server.Simulation
             }
 
             actor.SetPosition(resolved);
+            outputQueue.Enqueue(new MovementOutput(actor.ActorId, new MovementCommand
+            {
+                Position = actor.Position,
+                Direction = actor.Direction,
+                Speed = command.Speed,
+                IsSprinting = command.IsSprinting
+            }));
         }
 
-        private void HandleAbilityCommand(SimulatedActor actor, AbilityCastCommand command, DateTime now)
+        private void HandleAbilityCommand(SimulatedActor actor, AbilityCastCommand command, DateTime now, string? sessionId, string? requestId)
         {
             var target = FindActor(command.TargetId);
-            if (!abilityExecutor.Validate(command, actor, target, now, out _))
+            if (!abilityExecutor.Validate(command, actor, target, now, out var denial))
             {
+                outputQueue.Enqueue(new AbilityCastOutput(actor.ActorId, new AbilityCastResult
+                {
+                    AbilityId = command.AbilityId,
+                    Accepted = false,
+                    DenialReason = denial
+                }, sessionId, requestId));
                 return;
             }
 
             if (command.Timestamp > now + movementReconciliationGrace)
             {
+                outputQueue.Enqueue(new AbilityCastOutput(actor.ActorId, new AbilityCastResult
+                {
+                    AbilityId = command.AbilityId,
+                    Accepted = false,
+                    DenialReason = "timestamp"
+                }, sessionId, requestId));
                 return;
             }
 
             if (command.AbilityId is { Length: 0 })
             {
+                outputQueue.Enqueue(new AbilityCastOutput(actor.ActorId, new AbilityCastResult
+                {
+                    AbilityId = command.AbilityId,
+                    Accepted = false,
+                    DenialReason = "empty_ability"
+                }, sessionId, requestId));
                 return;
             }
 
             if (command.AbilityId == null)
             {
+                outputQueue.Enqueue(new AbilityCastOutput(actor.ActorId, new AbilityCastResult
+                {
+                    AbilityId = string.Empty,
+                    Accepted = false,
+                    DenialReason = "missing_ability"
+                }, sessionId, requestId));
                 return;
             }
 
             abilityExecutor.StartCast(command, actor, target, now);
+            outputQueue.Enqueue(new AbilityCastOutput(actor.ActorId, new AbilityCastResult
+            {
+                AbilityId = command.AbilityId,
+                Accepted = true,
+                DenialReason = string.Empty
+            }, sessionId, requestId));
+        }
+
+        private void EmitCombatEvents()
+        {
+            foreach (var result in abilityExecutor.Results)
+            {
+                outputQueue.Enqueue(new CombatOutput(new CombatEvent
+                {
+                    SourceId = result.SourceId,
+                    TargetId = result.TargetId ?? string.Empty,
+                    Amount = result.Amount,
+                    AbilityId = result.AbilityId,
+                    EventType = result.IsHeal ? CombatEventType.Heal : CombatEventType.Damage
+                }));
+            }
+
+            abilityExecutor.ClearResults();
+        }
+
+        public IReadOnlyCollection<SimulationOutput> ConsumeOutputs()
+        {
+            var outputs = new List<SimulationOutput>();
+            while (outputQueue.TryDequeue(out var output))
+            {
+                outputs.Add(output);
+            }
+
+            return outputs;
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Adventure.Server.Core.Lobby;
+using Adventure.Server.Persistence;
 
 namespace Adventure.Server.Core.Repositories
 {
@@ -39,8 +40,10 @@ namespace Adventure.Server.Core.Repositories
 
     public interface IDungeonRunRepository
     {
-        void RecordStart(string instanceId, string dungeonId, string partyId);
-        void RecordEnd(string instanceId);
+        DungeonRunRecord RecordStart(string instanceId, string dungeonId, string partyId);
+        void RecordEnd(string runId);
+        void AppendEvent(RunEventRecord logEvent);
+        IReadOnlyCollection<RunEventRecord> GetEvents(string runId);
     }
 
     public interface IDungeonSimulationFactory

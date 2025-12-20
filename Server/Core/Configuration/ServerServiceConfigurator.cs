@@ -1,8 +1,10 @@
+using Adventure.Server.Core.Dungeons;
 using Adventure.Server.Core.Lobby;
 using Adventure.Server.Core.Repositories;
 using Adventure.Server.Core.Sessions;
 using Adventure.Server.Persistence.MariaDb;
 using Adventure.Server.Persistence;
+using Adventure.Server.Simulation;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Adventure.Server.Core.Configuration
@@ -33,6 +35,9 @@ namespace Adventure.Server.Core.Configuration
             services.AddSingleton(sp => new SessionManager(sp.Get<ILoginTokenRepository>(), sp.Get<ISessionRepository>()));
             services.AddSingleton(sp => new LobbyManager(sp.Get<IPlayerProfileRepository>(), sp.Get<IPartyRepository>(), sp.Get<IChatHistoryRepository>()));
             services.AddSingleton(sp => new GameSessionService(sp.Get<IGameSessionRepository>()));
+            services.AddSingleton(_ => new SimulationLoop());
+            services.AddSingleton(sp => new DungeonSimulationFactory(sp.Get<SimulationLoop>(), sp.Get<AbilityCatalog>(), sp.Get<EnemyArchetypeCatalog>(), sp.Get<IDungeonRunRepository>()));
+            services.AddSingleton(sp => new DungeonInstanceManager(sp.Get<IPartyRepository>(), sp.Get<IDungeonSimulationFactory>()));
 
             return services;
         }
@@ -62,6 +67,8 @@ namespace Adventure.Server.Core.Configuration
             services.AddSingleton<SessionManager>();
             services.AddSingleton<LobbyManager>();
             services.AddSingleton<GameSessionService>();
+            services.AddSingleton<IDungeonSimulationFactory, DungeonSimulationFactory>();
+            services.AddSingleton<DungeonInstanceManager>();
 
             return services;
         }
